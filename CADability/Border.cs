@@ -1079,7 +1079,9 @@ namespace CADability.Shapes
                 }
             }
             bool wasClosed = isClosed;
+            ICurve2D unsplittedOutline = this.UnsplittedOutline;
             Segments = red.ToArray();
+            this.UnsplittedOutline = unsplittedOutline;
             if (wasClosed) forceClosed();
             bool dumy;
             Recalc(out dumy);
@@ -1145,7 +1147,9 @@ namespace CADability.Shapes
                     }
                 }
             }
+            ICurve2D unsplittedOutline = this.UnsplittedOutline;
             Segments = red.ToArray();
+            this.UnsplittedOutline = unsplittedOutline;
             if (segment.Length == 0)
             {
                 area = 0.0;
