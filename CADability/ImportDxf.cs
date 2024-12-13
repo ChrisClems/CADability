@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using ACadSharp;
 using netDxf;
 using netDxf.Entities;
 using CADability.GeoObject;
@@ -15,6 +16,8 @@ using System.Drawing;
 using netDxf.Tables;
 using System.Text;
 using System.IO;
+using ACadSharp.Entities;
+using Color = ACadSharp.Color;
 
 namespace CADability.DXF
 {
@@ -26,10 +29,13 @@ namespace CADability.DXF
     public class Import
     {
         private DxfDocument doc;
+        private ACadSharp.CadDocument acadDoc;
         private Project project;
         private Dictionary<string, GeoObject.Block> blockTable;
         private Dictionary<netDxf.Tables.Layer, ColorDef> layerColorTable;
+        private Dictionary<ACadSharp.Tables.Layer, Color> acadLayerColorTable;
         private Dictionary<netDxf.Tables.Layer, Attribute.Layer> layerTable;
+        private Dictionary<ACadSharp.Tables.Layer, Attribute.Layer> acadLayerTable;
         /// <summary>
         /// Create the Import instance. The document is being read and converted to netDXF objects.
         /// </summary>
@@ -38,31 +44,49 @@ namespace CADability.DXF
         {
             using (Stream stream = File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                MathHelper.Epsilon = 1e-8;
-                doc = DxfDocument.Load(stream);
+                // MathHelper.Epsilon = 1e-8;
+                // doc = DxfDocument.Load(stream);
+                acadDoc = ACadSharp.IO.DxfReader.Read(stream);
             }
         }
         public static bool CanImportVersion(string fileName)
         {
-            netDxf.Header.DxfVersion ver = DxfDocument.CheckDxfFileVersion(fileName, out bool isBinary);
-            return ver >= netDxf.Header.DxfVersion.AutoCad2000;
+            // netDxf.Header.DxfVersion ver = DxfDocument.CheckDxfFileVersion(fileName, out bool isBinary);
+            // return ver >= netDxf.Header.DxfVersion.AutoCad2000;
+            //TODO: Rewrite version check logic for AcadSharp version support
+            return true;
         }
         private void FillModelSpace(Model model)
         {
-            netDxf.Blocks.Block modelSpace = doc.Blocks["*Model_Space"];
-            foreach (EntityObject item in modelSpace.Entities)
+            // netDxf.Blocks.Block modelSpace = doc.Blocks["*Model_Space"];
+            // foreach (EntityObject item in modelSpace.Entities)
+            // {
+            //     IGeoObject geoObject = GeoObjectFromEntity(item);
+            //     if (geoObject != null) model.Add(geoObject);
+            // }
+            // model.Name = "*Model_Space";
+
+            var entities = acadDoc.ModelSpace.Entities;
+            foreach (Entity entity in entities)
             {
-                IGeoObject geoObject = GeoObjectFromEntity(item);
+                IGeoObject geoObject = GeoObjectFromEntity(entity);
                 if (geoObject != null) model.Add(geoObject);
             }
             model.Name = "*Model_Space";
         }
         private void FillPaperSpace(Model model)
         {
-            netDxf.Blocks.Block modelSpace = doc.Blocks["*Paper_Space"];
-            foreach (EntityObject item in modelSpace.Entities)
+            // netDxf.Blocks.Block modelSpace = doc.Blocks["*Paper_Space"];
+            // foreach (EntityObject item in modelSpace.Entities)
+            // {
+            //     IGeoObject geoObject = GeoObjectFromEntity(item);
+            //     if (geoObject != null) model.Add(geoObject);
+            // }
+            
+            var entities = acadDoc.PaperSpace.Entities;
+            foreach (Entity entity in entities)
             {
-                IGeoObject geoObject = GeoObjectFromEntity(item);
+                IGeoObject geoObject = GeoObjectFromEntity(entity);
                 if (geoObject != null) model.Add(geoObject);
             }
             model.Name = "*Paper_Space";
@@ -118,31 +142,31 @@ namespace CADability.DXF
             doc = null;
             return project;
         }
-        private IGeoObject GeoObjectFromEntity(EntityObject item)
+        private IGeoObject GeoObjectFromEntity(ACadSharp.CadObject item)
         {
             IGeoObject res = null;
             switch (item)
             {
-                case netDxf.Entities.Line dxfLine: res = CreateLine(dxfLine); break;
-                case netDxf.Entities.Ray dxfRay: res = CreateRay(dxfRay); break;
-                case netDxf.Entities.Arc dxfArc: res = CreateArc(dxfArc); break;
-                case netDxf.Entities.Circle dxfCircle: res = CreateCircle(dxfCircle); break;
-                case netDxf.Entities.Ellipse dxfEllipse: res = CreateEllipse(dxfEllipse); break;
-                case netDxf.Entities.Spline dxfSpline: res = CreateSpline(dxfSpline); break;
-                case netDxf.Entities.Face3D dxfFace: res = CreateFace(dxfFace); break;
-                case netDxf.Entities.PolyfaceMesh dxfPolyfaceMesh: res = CreatePolyfaceMesh(dxfPolyfaceMesh); break;
-                case netDxf.Entities.Hatch dxfHatch: res = CreateHatch(dxfHatch); break;
-                case netDxf.Entities.Solid dxfSolid: res = CreateSolid(dxfSolid); break;
-                case netDxf.Entities.Insert dxfInsert: res = CreateInsert(dxfInsert); break;
-                case netDxf.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
-                case netDxf.Entities.MLine dxfMLine: res = CreateMLine(dxfMLine); break;
-                case netDxf.Entities.Text dxfText: res = CreateText(dxfText); break;
-                case netDxf.Entities.Dimension dxfDimension: res = CreateDimension(dxfDimension); break;
-                case netDxf.Entities.MText dxfMText: res = CreateMText(dxfMText); break;
-                case netDxf.Entities.Leader dxfLeader: res = CreateLeader(dxfLeader); break;
-                case netDxf.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
-                case netDxf.Entities.Point dxfPoint: res = CreatePoint(dxfPoint); break;
-                case netDxf.Entities.Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
+                case ACadSharp.Entities.Line dxfLine: res = CreateLine(dxfLine); break;
+                case ACadSharp.Entities.Ray dxfRay: res = CreateRay(dxfRay); break;
+                case ACadSharp.Entities.Arc dxfArc: res = CreateArc(dxfArc); break;
+                case ACadSharp.Entities.Circle dxfCircle: res = CreateCircle(dxfCircle); break;
+                case ACadSharp.Entities.Ellipse dxfEllipse: res = CreateEllipse(dxfEllipse); break;
+                case ACadSharp.Entities.Spline dxfSpline: res = CreateSpline(dxfSpline); break;
+                case ACadSharp.Entities.Face3D dxfFace: res = CreateFace(dxfFace); break;
+                case ACadSharp.Entities.PolyfaceMesh dxfPolyfaceMesh: res = CreatePolyfaceMesh(dxfPolyfaceMesh); break;
+                case ACadSharp.Entities.Hatch dxfHatch: res = CreateHatch(dxfHatch); break;
+                case ACadSharp.Entities.Solid dxfSolid: res = CreateSolid(dxfSolid); break;
+                case ACadSharp.Entities.Insert dxfInsert: res = CreateInsert(dxfInsert); break;
+                case ACadSharp.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
+                case ACadSharp.Entities.MLine dxfMLine: res = CreateMLine(dxfMLine); break;
+                case ACadSharp.Entities.TextEntity dxfText: res = CreateText(dxfText); break;
+                case ACadSharp.Entities.Dimension dxfDimension: res = CreateDimension(dxfDimension); break;
+                case ACadSharp.Entities.MText dxfMText: res = CreateMText(dxfMText); break;
+                case ACadSharp.Entities.Leader dxfLeader: res = CreateLeader(dxfLeader); break;
+                case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
+                case ACadSharp.Entities.Point dxfPoint: res = CreatePoint(dxfPoint); break;
+                case ACadSharp.Entities.Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
                 default:
                     System.Diagnostics.Trace.WriteLine("dxf: not imported: " + item.ToString());
                     break;
