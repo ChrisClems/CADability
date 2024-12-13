@@ -13,15 +13,11 @@ using Point = CADability.WebDrawing.Point;
 #else
 using System.Drawing;
 #endif
+using netDxf.Tables;
 using System.Text;
 using System.IO;
-using System.Linq;
-using System.Numerics;
 using ACadSharp.Entities;
-using CSMath;
-using Block = ACadSharp.Blocks.Block;
 using Color = ACadSharp.Color;
-using Polyline2D = ACadSharp.Entities.Polyline2D;
 
 namespace CADability.DXF
 {
@@ -36,7 +32,7 @@ namespace CADability.DXF
         private ACadSharp.CadDocument acadDoc;
         private Project project;
         private Dictionary<string, GeoObject.Block> blockTable;
-        private Dictionary<ACadSharp.Tables.Layer, ColorDef> layerColorTable;
+        private Dictionary<netDxf.Tables.Layer, ColorDef> layerColorTable;
         private Dictionary<ACadSharp.Tables.Layer, Color> acadLayerColorTable;
         private Dictionary<netDxf.Tables.Layer, Attribute.Layer> layerTable;
         private Dictionary<ACadSharp.Tables.Layer, Attribute.Layer> acadLayerTable;
@@ -223,17 +219,13 @@ namespace CADability.DXF
             project.HatchStyleList.Add(nhss);
             return nhss;
         }
-        private HatchStyleLines FindOrCreateHatchStyleLines(ACadSharp.Entities.Entity entity, double lineAngle, double lineDistance, double[] dashes)
+        private HatchStyleLines FindOrCreateHatchStyleLines(netDxf.Entities.EntityObject entity, double lineAngle, double lineDistance, double[] dashes)
         {
-            var entColor = System.Drawing.Color.FromArgb(0, entity.Color.R, entity.Color.G, entity.Color.B);
             for (int i = 0; i < project.HatchStyleList.Count; i++)
             {
                 if (project.HatchStyleList[i] is HatchStyleLines hsl)
                 {
-                    // TODO: Create PR for ACadSharp to produce System.Drawing.Color type?
-                    // Ignore alpha channel. Not supported by ACadSharp
-                    entColor = System.Drawing.Color.FromArgb(hsl.ColorDef.Color.A, entColor.R, entColor.G, entColor.B);
-                    if (hsl.ColorDef.Color.ToArgb() == entColor.ToArgb() && (Math.Abs(hsl.LineAngle) - Math.Abs(lineAngle) < Precision.eps) && Math.Abs(hsl.LineDistance) - Math.Abs(lineDistance) < Precision.eps) return hsl;
+                    if (hsl.ColorDef.Color.ToArgb() == entity.Layer.Color.ToColor().ToArgb() && hsl.LineAngle == lineAngle && hsl.LineDistance == lineDistance) return hsl;
                 }
             }
             HatchStyleLines nhsl = new HatchStyleLines();
@@ -241,40 +233,30 @@ namespace CADability.DXF
             nhsl.Name = name;
             nhsl.LineAngle = lineAngle;
             nhsl.LineDistance = lineDistance;
-            nhsl.ColorDef = project.ColorList.CreateOrFind(entity.Color.ToString(), entColor);
-            LineweightType lw = entity.LineWeight;
-            if (lw == LineweightType.ByLayer) lw = entity.Layer.LineWeight;
-            // TODO: Test this with a block to make sure AcadSharp blocks are behaving correctly
-            if (lw == LineweightType.ByBlock && entity.Owner != null)
-            {
-                Block blk = entity.Owner as Block;
-                if (blk != null) lw = blk.Layer.LineWeight;
-            }
+            nhsl.ColorDef = project.ColorList.CreateOrFind(entity.Layer.Color.ToColor().ToString(), entity.Layer.Color.ToColor());
+            Lineweight lw = entity.Lineweight;
+            if (lw == Lineweight.ByLayer) lw = entity.Layer.Lineweight;
+            if (lw == Lineweight.ByBlock && entity.Owner != null) lw = entity.Owner.Layer.Lineweight; // not sure, but Block doesn't seem to have a lineweight
             if (lw < 0) lw = 0;
             nhsl.LineWidth = project.LineWidthList.CreateOrFind("DXF_" + lw.ToString(), ((int)lw) / 100.0);
             nhsl.LinePattern = FindOrcreateLinePattern(dashes);
             project.HatchStyleList.Add(nhsl);
             return nhsl;
         }
-        private ColorDef FindOrCreateColor(ACadSharp.Color color, ACadSharp.Tables.Layer layer)
+        private ColorDef FindOrCreateColor(AciColor color, netDxf.Tables.Layer layer)
         {
             if (color.IsByLayer && layer != null)
             {
                 ColorDef res = layerColorTable[layer] as ColorDef;
                 if (res != null) return res;
             }
-            Color rgb = new Color(color.R, color.G, color.B);
-            Color white = new Color(255, 255, 255);
-            // Change to raw RGB values for black and white...
-            
-            if (rgb.Equals(white))
+            Color rgb = color.ToColor();
+            if (color.ToColor().ToArgb() == Color.White.ToArgb())
             {
-                rgb = new Color(000, 000, 000);
+                rgb = Color.Black;
             }
             string colorname = rgb.ToString();
-            // TODO: Add system.drawing.color support to Acadsharp
-            var rgb2 = System.Drawing.Color.FromArgb(000, rgb.R, rgb.G, rgb.B);
-            return project.ColorList.CreateOrFind(colorname, rgb2);
+            return project.ColorList.CreateOrFind(colorname, rgb);
         }
         private string NewName(string prefix, IAttributeList list)
         {
@@ -377,16 +359,16 @@ namespace CADability.DXF
             }
             return found;
         }
-        private IGeoObject CreateLine(ACadSharp.Entities.Line line)
+        private IGeoObject CreateLine(netDxf.Entities.Line line)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
+            Vector3 sp = line.StartPoint;
+            Vector3 ep = line.EndPoint;
             {
-                XYZ sp = line.StartPoint;
-                XYZ ep = line.EndPoint;
-                l.StartPoint = new GeoPoint(sp.X, sp.Y, sp.Z);
-                l.EndPoint = new GeoPoint(ep.X, ep.Y, ep.Z);
+                l.StartPoint = GeoPoint(sp);
+                l.EndPoint = GeoPoint(ep);
                 double th = line.Thickness;
-                GeoVector no = new GeoVector(line.Normal.X, line.Normal.Y, line.Normal.Z);
+                GeoVector no = GeoVector(line.Normal);
                 if (th != 0.0 && !no.IsNullVector())
                 {
                     if (l.Length < Precision.eps)
@@ -402,36 +384,36 @@ namespace CADability.DXF
                 return l;
             }
         }
-        private IGeoObject CreateRay(ACadSharp.Entities.Ray ray)
+        private IGeoObject CreateRay(Ray ray)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
-            XYZ sp = ray.StartPoint;
-            XYZ dir = ray.Direction;
-            l.StartPoint = new GeoPoint(sp.X, sp.Y, sp.Z);
-            l.EndPoint = l.StartPoint + new GeoVector(dir.X, dir.Y, dir.Z);
+            Vector3 sp = ray.Origin;
+            Vector3 dir = ray.Direction;
+            l.StartPoint = GeoPoint(sp);
+            l.EndPoint = l.StartPoint + GeoVector(dir);
             return l;
         }
-        private IGeoObject CreateArc(ACadSharp.Entities.Arc arc)
+        private IGeoObject CreateArc(Arc arc)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            GeoVector nor = new GeoVector(arc.Normal.X, arc.Normal.Y, arc.Normal.Z);
-            GeoPoint cnt = new GeoPoint(arc.Center.X, arc.Center.Y, arc.Center.Z);
-            Plane plane = new Plane(cnt, nor);
-            double start = arc.StartAngle;
-            double end = arc.EndAngle;
+            GeoVector nor = GeoVector(arc.Normal);
+            GeoPoint cnt = GeoPoint(arc.Center);
+            Plane plane = Plane(arc.Center, arc.Normal);
+            double start = Angle.Deg(arc.StartAngle);
+            double end = Angle.Deg(arc.EndAngle);
             double sweep = end - start;
             if (sweep < 0.0) sweep += Math.PI * 2.0;
             //if (sweep < Precision.epsa) sweep = Math.PI * 2.0;
             if (start == end) sweep = 0.0;
             if (start == Math.PI * 2.0 && end == 0.0) sweep = 0.0; // see in modena.dxf
             // Arcs are always counterclockwise, but maybe the normal is (0,0,-1) in 2D drawings.
-            e.SetArcPlaneCenterRadiusAngles(plane, cnt, arc.Radius, start, sweep);
+            e.SetArcPlaneCenterRadiusAngles(plane, GeoPoint(arc.Center), arc.Radius, start, sweep);
 
             //If an arc is a full circle don't import as ellipse as this will be discarded later by Ellipse.HasValidData() 
             if (e.IsCircle && sweep == 0.0d && Precision.IsEqual(e.StartPoint, e.EndPoint))
             {
                 GeoObject.Ellipse circle = GeoObject.Ellipse.Construct();
-                circle.SetCirclePlaneCenterRadius(plane, cnt, arc.Radius);
+                circle.SetCirclePlaneCenterRadius(plane, GeoPoint(arc.Center), arc.Radius);
                 e = circle;
             }
 
@@ -443,35 +425,32 @@ namespace CADability.DXF
             return e;
         }
 
-        private IGeoObject CreateCircle(ACadSharp.Entities.Circle circle)
+        private IGeoObject CreateCircle(netDxf.Entities.Circle circle)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            GeoPoint cnt = new GeoPoint(circle.Center.X, circle.Center.Y, circle.Center.Z);
-            GeoVector nor = new GeoVector(circle.Normal.X, circle.Normal.Y, circle.Normal.Z);
-            Plane plane = new Plane(cnt, nor);
-            e.SetCirclePlaneCenterRadius(plane, cnt, circle.Radius);
+            Plane plane = Plane(circle.Center, circle.Normal);
+            e.SetCirclePlaneCenterRadius(plane, GeoPoint(circle.Center), circle.Radius);
             double th = circle.Thickness;
-            if (th != 0.0 && !nor.IsNullVector())
+            GeoVector no = GeoVector(circle.Normal);
+            if (th != 0.0 && !no.IsNullVector())
             {
-                return Make3D.Extrude(e, th * nor, null);
+                return Make3D.Extrude(e, th * no, null);
             }
             return e;
         }
-        private IGeoObject CreateEllipse(ACadSharp.Entities.Ellipse ellipse)
+        private IGeoObject CreateEllipse(netDxf.Entities.Ellipse ellipse)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            GeoPoint cnt = new GeoPoint(ellipse.Center.X, ellipse.Center.Y, ellipse.Center.Z);
-            GeoVector nor = new GeoVector(ellipse.Normal.X, ellipse.Normal.Y, ellipse.Normal.Z);
-            Plane plane = new Plane(cnt, nor);
-            ModOp2D rot = ModOp2D.Rotate(ellipse.Rotation);
+            Plane plane = Plane(ellipse.Center, ellipse.Normal);
+            ModOp2D rot = ModOp2D.Rotate(Angle.Deg(ellipse.Rotation));
             GeoVector2D majorAxis = 0.5 * ellipse.MajorAxis * (rot * GeoVector2D.XAxis);
             GeoVector2D minorAxis = 0.5 * ellipse.MinorAxis * (rot * GeoVector2D.YAxis);
-            e.SetEllipseCenterAxis(cnt, plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
+            e.SetEllipseCenterAxis(GeoPoint(ellipse.Center), plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
 
-            XY startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartParameter);
+            Vector2 startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartAngle);
             double sp = CalcStartEndParameter(startPoint, ellipse.MajorAxis, ellipse.MinorAxis);
 
-            XY endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndParameter);
+            Vector2 endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndAngle);
             double ep = CalcStartEndParameter(endPoint, ellipse.MajorAxis, ellipse.MinorAxis);
 
             e.StartParameter = sp;
@@ -482,7 +461,7 @@ namespace CADability.DXF
             return e;
         }
 
-        private double CalcStartEndParameter(XY startEndPoint, double majorAxis, double minorAxis)
+        private double CalcStartEndParameter(Vector2 startEndPoint, double majorAxis, double minorAxis)
         {
             double a = 1 / (0.5 * majorAxis);
             double b = 1 / (0.5 * minorAxis);
@@ -490,31 +469,28 @@ namespace CADability.DXF
             return parameter;
         }
 
-        private IGeoObject CreateSpline(ACadSharp.Entities.Spline spline)
+        private IGeoObject CreateSpline(netDxf.Entities.Spline spline)
         {
             int degree = spline.Degree;
-            bool isClosed = spline.Flags.HasFlag(SplineFlags.Closed);
-            bool isPeriodic = spline.Flags.HasFlag(SplineFlags.Periodic);
-            if (spline.ControlPoints.Count == 0 && spline.FitPoints.Count > 0)
+            if (spline.ControlPoints.Length == 0 && spline.FitPoints.Count > 0)
             {
                 BSpline bsp = BSpline.Construct();
                 GeoPoint[] fp = new GeoPoint[spline.FitPoints.Count];
                 for (int i = 0; i < fp.Length; i++)
                 {
-                    fp[i] = new GeoPoint(spline.FitPoints[i].X, spline.FitPoints[i].Y, spline.FitPoints[i].Z);
+                    fp[i] = GeoPoint(spline.FitPoints[i]);
                 }
-                
-                bsp.ThroughPoints(fp, spline.Degree, isClosed);
+                bsp.ThroughPoints(fp, spline.Degree, spline.IsClosed);
                 return bsp;
             }
             else
             {
                 bool forcePolyline2D = false;
-                GeoPoint[] poles = new GeoPoint[spline.ControlPoints.Count];
-                double[] weights = new double[spline.ControlPoints.Count];
+                GeoPoint[] poles = new GeoPoint[spline.ControlPoints.Length];
+                double[] weights = new double[spline.ControlPoints.Length];
                 for (int i = 0; i < poles.Length; i++)
                 {
-                    poles[i] = new GeoPoint(spline.ControlPoints[i].X, spline.ControlPoints[i].Y, spline.ControlPoints[i].Z);
+                    poles[i] = GeoPoint(spline.ControlPoints[i]);
                     weights[i] = spline.Weights[i];
 
                     if (i > 0 && (poles[i] | poles[i - 1]) < Precision.eps)
@@ -522,7 +498,7 @@ namespace CADability.DXF
                         forcePolyline2D = true;
                     }
                 }
-                double[] kn = new double[spline.Knots.Count];
+                double[] kn = new double[spline.Knots.Length];
                 for (int i = 0; i < kn.Length; ++i)
                 {
                     kn[i] = spline.Knots[i];
@@ -536,7 +512,7 @@ namespace CADability.DXF
                 }
                 BSpline bsp = BSpline.Construct();
                 //TODO: Can Periodic spline be not closed?
-                if (bsp.SetData(degree, poles, weights, kn, null, isClosed && isPeriodic))
+                if (bsp.SetData(degree, poles, weights, kn, null, spline.IsClosedPeriodic))
                 {
                     // BSplines with inner knots of multiplicity degree+1 make problems, because the spline have no derivative at these points
                     // so we split these splines
@@ -582,12 +558,11 @@ namespace CADability.DXF
                         ICurve approxCurve = curve.Approximate(true, maxError);
 
                         int usedCurves = 0;
-                        if (approxCurve is GeoObject.Line || approxCurve.SubCurves.Length == 1 && approxCurve.SubCurves[0] is GeoObject.Line)
+                        if (approxCurve is GeoObject.Line)
                             usedCurves = 2;
                         else
                             usedCurves = approxCurve.SubCurves.Length;
-                        
-                        // TODO: Find a way to implement this in ACadSharp
+
                         netDxf.Entities.Polyline2D p2d = spline.ToPolyline2D(usedCurves);
                         var res = CreatePolyline2D(p2d);
                         
@@ -601,16 +576,16 @@ namespace CADability.DXF
             return null;
         }
 
-        private IGeoObject CreateFace(ACadSharp.Entities.Face3D face)
+        private IGeoObject CreateFace(netDxf.Entities.Face3D face)
         {
             List<GeoPoint> points = new List<GeoPoint>();
-            GeoPoint p = new GeoPoint(face.FirstCorner.X, face.FirstCorner.Y, face.FirstCorner.Z);
+            GeoPoint p = GeoPoint(face.FirstVertex);
             points.Add(p);
-            p = new GeoPoint(face.SecondCorner.X, face.SecondCorner.Y, face.SecondCorner.Z);
+            p = GeoPoint(face.SecondVertex);
             if (points[points.Count - 1] != p) points.Add(p);
-            p = new GeoPoint(face.ThirdCorner.X, face.ThirdCorner.Y, face.ThirdCorner.Z);
+            p = GeoPoint(face.ThirdVertex);
             if (points[points.Count - 1] != p) points.Add(p);
-            p = new GeoPoint(face.FourthCorner.X, face.FourthCorner.Y, face.FourthCorner.Z);
+            p = GeoPoint(face.FourthVertex);
             if (points[points.Count - 1] != p) points.Add(p);
             if (points.Count == 3)
             {
@@ -658,22 +633,20 @@ namespace CADability.DXF
             return null;
 
         }
-        private IGeoObject CreatePolyfaceMesh(ACadSharp.Entities.PolyfaceMesh polyfacemesh)
+        private IGeoObject CreatePolyfaceMesh(netDxf.Entities.PolyfaceMesh polyfacemesh)
         {
-            Entity[] exploded = polyfacemesh.Explode().ToArray();
+            polyfacemesh.Explode();
 
-            GeoPoint[] vertices = new GeoPoint[exploded.Length];
+            GeoPoint[] vertices = new GeoPoint[polyfacemesh.Vertexes.Length];
             for (int i = 0; i < vertices.Length; i++)
             {
-                ACadSharp.Entities.Vertex vert = (ACadSharp.Entities.Vertex)exploded[i];
-                vertices[i] = new GeoPoint(vert.Location.X, vert.Location.Y, vert.Location.Z); // there is more information, I would need a good example
+                vertices[i] = GeoPoint(polyfacemesh.Vertexes[i]); // there is more information, I would need a good example
             }
 
             List<Face> faces = new List<Face>();
             for (int i = 0; i < polyfacemesh.Faces.Count; i++)
             {
-                
-                short[] indices = {polyfacemesh.Faces[i].Index1, polyfacemesh.Faces[i].Index2, polyfacemesh.Faces[i].Index3, polyfacemesh.Faces[i].Index4};
+                short[] indices = polyfacemesh.Faces[i].VertexIndexes;
                 for (int j = 0; j < indices.Length; j++)
                 {
                     indices[j] = (short)(Math.Abs(indices[j]) - 1); // why? what does it mean?
@@ -723,22 +696,22 @@ namespace CADability.DXF
             }
             else return null;
         }
-        private IGeoObject CreateHatch(ACadSharp.Entities.Hatch hatch)
+        private IGeoObject CreateHatch(netDxf.Entities.Hatch hatch)
         {
             CompoundShape cs = null;
             bool ok = true;
             List<ICurve2D> allCurves = new List<ICurve2D>();
             Plane pln = CADability.Plane.XYPlane;
-            for (int i = 0; i < hatch.Paths.Count; i++)
+            for (int i = 0; i < hatch.BoundaryPaths.Count; i++)
             {
 
                 // System.Diagnostics.Trace.WriteLine("Loop: " + i.ToString());
                 //OdDbHatch.HatchLoopType.kExternal
                 // hatch.BoundaryPaths[i].PathType
                 List<ICurve> boundaryEntities = new List<ICurve>();
-                for (int j = 0; j < hatch.Paths[i].Edges.Count; j++)
+                for (int j = 0; j < hatch.BoundaryPaths[i].Edges.Count; j++)
                 {
-                    IGeoObject ent = GeoObjectFromEntity(hatch.Paths[i].Entities[j]);
+                    IGeoObject ent = GeoObjectFromEntity(hatch.BoundaryPaths[i].Edges[j].ConvertTo());
                     if (ent is ICurve crv) boundaryEntities.Add(crv);
                 }
                 //for (int j = 0; j < hatch.BoundaryPaths[i].Entities.Count; j++)
@@ -758,6 +731,7 @@ namespace CADability.DXF
                 try
                 {
                     Border border = Border.FromUnorientedList(bdr, true);
+                    HatchBoundaryPathTypeFlags flag = hatch.BoundaryPaths[i].PathType;
                     allCurves.AddRange(bdr);
                     if (border != null)
                     {
@@ -789,24 +763,24 @@ namespace CADability.DXF
                 GeoObject.Hatch res = GeoObject.Hatch.Construct();
                 res.CompoundShape = cs;
                 res.Plane = pln;
-                if (hatch.PatternType == HatchPatternType.SolidFill)
+                if (hatch.Pattern.Fill == HatchFillType.SolidFill)
                 {
-                    HatchStyleSolid hst = FindOrCreateSolidHatchStyle(hatch.Color);
+                    HatchStyleSolid hst = FindOrCreateSolidHatchStyle(hatch.Layer.Color.ToColor());
                     res.HatchStyle = hst;
                     return res;
                 }
                 else
                 {
                     GeoObjectList list = new GeoObjectList();
-                    for (int i = 0; i < hatch.Pattern.Lines.Count; i++)
+                    for (int i = 0; i < hatch.Pattern.LineDefinitions.Count; i++)
                     {
                         if (i > 0) res = res.Clone() as GeoObject.Hatch;
-                        double lineAngle = Angle.Deg(hatch.Pattern.Lines[i].Angle);
-                        double baseX = hatch.Pattern.Lines[i].BasePoint.X;
-                        double baseY = hatch.Pattern.Lines[i].BasePoint.Y;
-                        double offsetX = hatch.Pattern.Lines[i].BasePoint.X;
-                        double offsetY = hatch.Pattern.Lines[i].BasePoint.Y;
-                        double[] dashes = hatch.Pattern.Lines[i].DashLengths.ToArray();
+                        double lineAngle = Angle.Deg(hatch.Pattern.LineDefinitions[i].Angle);
+                        double baseX = hatch.Pattern.LineDefinitions[i].Origin.X;
+                        double baseY = hatch.Pattern.LineDefinitions[i].Origin.Y;
+                        double offsetX = hatch.Pattern.LineDefinitions[i].Delta.X;
+                        double offsetY = hatch.Pattern.LineDefinitions[i].Delta.Y;
+                        double[] dashes = hatch.Pattern.LineDefinitions[i].DashPattern.ToArray();
                         HatchStyleLines hsl = FindOrCreateHatchStyleLines(hatch, lineAngle, Math.Sqrt(offsetX * offsetX + offsetY * offsetY), dashes);
                         res.HatchStyle = hsl;
                         list.Add(res);
@@ -980,6 +954,7 @@ namespace CADability.DXF
             double h = txt.Height;
             Plane plane = Plane(txt.Position, txt.Normal);
 
+            bool isShx = false;
             if (typeface.Length > 0)
             {
                 text.Font = typeface;
@@ -989,6 +964,7 @@ namespace CADability.DXF
                 if (filename.EndsWith(".shx") || filename.EndsWith(".SHX"))
                 {
                     filename = filename.Substring(0, filename.Length - 4);
+                    isShx = true;
                 }
                 if (filename.EndsWith(".ttf") || filename.EndsWith(".TTF"))
                 {
