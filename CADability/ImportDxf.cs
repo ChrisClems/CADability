@@ -426,16 +426,17 @@ namespace CADability.DXF
             return e;
         }
 
-        private IGeoObject CreateCircle(netDxf.Entities.Circle circle)
+        private IGeoObject CreateCircle(Circle circle)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            Plane plane = Plane(circle.Center, circle.Normal);
-            e.SetCirclePlaneCenterRadius(plane, GeoPoint(circle.Center), circle.Radius);
+            GeoPoint cnt = new GeoPoint(circle.Center.X, circle.Center.Y, circle.Center.Z);
+            GeoVector nor = new GeoVector(circle.Normal.X, circle.Normal.Y, circle.Normal.Z);
+            Plane plane = new Plane(cnt, nor);
+            e.SetCirclePlaneCenterRadius(plane, cnt, circle.Radius);
             double th = circle.Thickness;
-            GeoVector no = GeoVector(circle.Normal);
-            if (th != 0.0 && !no.IsNullVector())
+            if (th != 0.0 && !nor.IsNullVector())
             {
-                return Make3D.Extrude(e, th * no, null);
+                return Make3D.Extrude(e, th * nor, null);
             }
             return e;
         }
