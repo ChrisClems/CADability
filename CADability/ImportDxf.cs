@@ -15,10 +15,12 @@ using System.Drawing;
 #endif
 using System.Text;
 using System.IO;
+using System.Linq;
 using System.Numerics;
 using ACadSharp.Entities;
 using CSMath;
 using Color = ACadSharp.Color;
+using Polyline2D = ACadSharp.Entities.Polyline2D;
 
 namespace CADability.DXF
 {
@@ -473,28 +475,31 @@ namespace CADability.DXF
             return parameter;
         }
 
-        private IGeoObject CreateSpline(netDxf.Entities.Spline spline)
+        private IGeoObject CreateSpline(ACadSharp.Entities.Spline spline)
         {
             int degree = spline.Degree;
-            if (spline.ControlPoints.Length == 0 && spline.FitPoints.Count > 0)
+            bool isClosed = spline.Flags.HasFlag(SplineFlags.Closed);
+            bool isPeriodic = spline.Flags.HasFlag(SplineFlags.Periodic);
+            if (spline.ControlPoints.Count == 0 && spline.FitPoints.Count > 0)
             {
                 BSpline bsp = BSpline.Construct();
                 GeoPoint[] fp = new GeoPoint[spline.FitPoints.Count];
                 for (int i = 0; i < fp.Length; i++)
                 {
-                    fp[i] = GeoPoint(spline.FitPoints[i]);
+                    fp[i] = new GeoPoint(spline.FitPoints[i].X, spline.FitPoints[i].Y, spline.FitPoints[i].Z);
                 }
-                bsp.ThroughPoints(fp, spline.Degree, spline.IsClosed);
+                
+                bsp.ThroughPoints(fp, spline.Degree, isClosed);
                 return bsp;
             }
             else
             {
                 bool forcePolyline2D = false;
-                GeoPoint[] poles = new GeoPoint[spline.ControlPoints.Length];
-                double[] weights = new double[spline.ControlPoints.Length];
+                GeoPoint[] poles = new GeoPoint[spline.ControlPoints.Count];
+                double[] weights = new double[spline.ControlPoints.Count];
                 for (int i = 0; i < poles.Length; i++)
                 {
-                    poles[i] = GeoPoint(spline.ControlPoints[i]);
+                    poles[i] = new GeoPoint(spline.ControlPoints[i].X, spline.ControlPoints[i].Y, spline.ControlPoints[i].Z);
                     weights[i] = spline.Weights[i];
 
                     if (i > 0 && (poles[i] | poles[i - 1]) < Precision.eps)
@@ -502,7 +507,7 @@ namespace CADability.DXF
                         forcePolyline2D = true;
                     }
                 }
-                double[] kn = new double[spline.Knots.Length];
+                double[] kn = new double[spline.Knots.Count];
                 for (int i = 0; i < kn.Length; ++i)
                 {
                     kn[i] = spline.Knots[i];
@@ -516,7 +521,7 @@ namespace CADability.DXF
                 }
                 BSpline bsp = BSpline.Construct();
                 //TODO: Can Periodic spline be not closed?
-                if (bsp.SetData(degree, poles, weights, kn, null, spline.IsClosedPeriodic))
+                if (bsp.SetData(degree, poles, weights, kn, null, isClosed && isPeriodic))
                 {
                     // BSplines with inner knots of multiplicity degree+1 make problems, because the spline have no derivative at these points
                     // so we split these splines
@@ -566,7 +571,8 @@ namespace CADability.DXF
                             usedCurves = 2;
                         else
                             usedCurves = approxCurve.SubCurves.Length;
-
+                        
+                        // TODO: Find a way to implement this in ACadSharp
                         netDxf.Entities.Polyline2D p2d = spline.ToPolyline2D(usedCurves);
                         var res = CreatePolyline2D(p2d);
                         
