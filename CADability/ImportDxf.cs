@@ -397,24 +397,24 @@ namespace CADability.DXF
         private IGeoObject CreateArc(Arc arc)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            GeoVector nor = GeoVector(arc.Normal);
-            GeoPoint cnt = GeoPoint(arc.Center);
-            Plane plane = Plane(arc.Center, arc.Normal);
-            double start = Angle.Deg(arc.StartAngle);
-            double end = Angle.Deg(arc.EndAngle);
+            GeoVector nor = new GeoVector(arc.Normal.X, arc.Normal.Y, arc.Normal.Z);
+            GeoPoint cnt = new GeoPoint(arc.Center.X, arc.Center.Y, arc.Center.Z);
+            Plane plane = new Plane(cnt, nor);
+            double start = arc.StartAngle;
+            double end = arc.EndAngle;
             double sweep = end - start;
             if (sweep < 0.0) sweep += Math.PI * 2.0;
             //if (sweep < Precision.epsa) sweep = Math.PI * 2.0;
             if (start == end) sweep = 0.0;
             if (start == Math.PI * 2.0 && end == 0.0) sweep = 0.0; // see in modena.dxf
             // Arcs are always counterclockwise, but maybe the normal is (0,0,-1) in 2D drawings.
-            e.SetArcPlaneCenterRadiusAngles(plane, GeoPoint(arc.Center), arc.Radius, start, sweep);
+            e.SetArcPlaneCenterRadiusAngles(plane, cnt, arc.Radius, start, sweep);
 
             //If an arc is a full circle don't import as ellipse as this will be discarded later by Ellipse.HasValidData() 
             if (e.IsCircle && sweep == 0.0d && Precision.IsEqual(e.StartPoint, e.EndPoint))
             {
                 GeoObject.Ellipse circle = GeoObject.Ellipse.Construct();
-                circle.SetCirclePlaneCenterRadius(plane, GeoPoint(arc.Center), arc.Radius);
+                circle.SetCirclePlaneCenterRadius(plane, cnt, arc.Radius);
                 e = circle;
             }
 
