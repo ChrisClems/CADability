@@ -388,10 +388,10 @@ namespace CADability.DXF
         private IGeoObject CreateRay(Ray ray)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
-            Vector3 sp = ray.Origin;
-            Vector3 dir = ray.Direction;
-            l.StartPoint = GeoPoint(sp);
-            l.EndPoint = l.StartPoint + GeoVector(dir);
+            XYZ sp = ray.StartPoint;
+            XYZ dir = ray.Direction;
+            l.StartPoint = new GeoPoint(sp.X, sp.Y, sp.Z);
+            l.EndPoint = l.StartPoint + new GeoVector(dir.X, dir.Y, dir.Z);
             return l;
         }
         private IGeoObject CreateArc(Arc arc)
