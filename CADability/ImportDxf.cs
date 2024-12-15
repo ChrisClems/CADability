@@ -13,10 +13,11 @@ using Point = CADability.WebDrawing.Point;
 #else
 using System.Drawing;
 #endif
-using netDxf.Tables;
 using System.Text;
 using System.IO;
+using System.Numerics;
 using ACadSharp.Entities;
+using CSMath;
 using Color = ACadSharp.Color;
 
 namespace CADability.DXF
@@ -359,16 +360,16 @@ namespace CADability.DXF
             }
             return found;
         }
-        private IGeoObject CreateLine(netDxf.Entities.Line line)
+        private IGeoObject CreateLine(ACadSharp.Entities.Line line)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
-            Vector3 sp = line.StartPoint;
-            Vector3 ep = line.EndPoint;
             {
-                l.StartPoint = GeoPoint(sp);
-                l.EndPoint = GeoPoint(ep);
+                XYZ sp = line.StartPoint;
+                XYZ ep = line.EndPoint;
+                l.StartPoint = new GeoPoint(sp.X, sp.Y, sp.Z);
+                l.EndPoint = new GeoPoint(ep.X, ep.Y, ep.Z);
                 double th = line.Thickness;
-                GeoVector no = GeoVector(line.Normal);
+                GeoVector no = new GeoVector(line.Normal.X, line.Normal.Y, line.Normal.Z);
                 if (th != 0.0 && !no.IsNullVector())
                 {
                     if (l.Length < Precision.eps)
