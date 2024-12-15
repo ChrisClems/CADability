@@ -385,7 +385,7 @@ namespace CADability.DXF
                 return l;
             }
         }
-        private IGeoObject CreateRay(Ray ray)
+        private IGeoObject CreateRay(ACadSharp.Entities.Ray ray)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
             XYZ sp = ray.StartPoint;
@@ -394,7 +394,7 @@ namespace CADability.DXF
             l.EndPoint = l.StartPoint + new GeoVector(dir.X, dir.Y, dir.Z);
             return l;
         }
-        private IGeoObject CreateArc(Arc arc)
+        private IGeoObject CreateArc(ACadSharp.Entities.Arc arc)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
             GeoVector nor = new GeoVector(arc.Normal.X, arc.Normal.Y, arc.Normal.Z);
@@ -426,7 +426,7 @@ namespace CADability.DXF
             return e;
         }
 
-        private IGeoObject CreateCircle(Circle circle)
+        private IGeoObject CreateCircle(ACadSharp.Entities.Circle circle)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
             GeoPoint cnt = new GeoPoint(circle.Center.X, circle.Center.Y, circle.Center.Z);
@@ -440,19 +440,21 @@ namespace CADability.DXF
             }
             return e;
         }
-        private IGeoObject CreateEllipse(netDxf.Entities.Ellipse ellipse)
+        private IGeoObject CreateEllipse(ACadSharp.Entities.Ellipse ellipse)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
-            Plane plane = Plane(ellipse.Center, ellipse.Normal);
-            ModOp2D rot = ModOp2D.Rotate(Angle.Deg(ellipse.Rotation));
+            GeoPoint cnt = new GeoPoint(ellipse.Center.X, ellipse.Center.Y, ellipse.Center.Z);
+            GeoVector nor = new GeoVector(ellipse.Normal.X, ellipse.Normal.Y, ellipse.Normal.Z);
+            Plane plane = new Plane(cnt, nor);
+            ModOp2D rot = ModOp2D.Rotate(ellipse.Rotation);
             GeoVector2D majorAxis = 0.5 * ellipse.MajorAxis * (rot * GeoVector2D.XAxis);
             GeoVector2D minorAxis = 0.5 * ellipse.MinorAxis * (rot * GeoVector2D.YAxis);
-            e.SetEllipseCenterAxis(GeoPoint(ellipse.Center), plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
+            e.SetEllipseCenterAxis(cnt, plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
 
-            Vector2 startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartAngle);
+            XY startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartParameter);
             double sp = CalcStartEndParameter(startPoint, ellipse.MajorAxis, ellipse.MinorAxis);
 
-            Vector2 endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndAngle);
+            XY endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndParameter);
             double ep = CalcStartEndParameter(endPoint, ellipse.MajorAxis, ellipse.MinorAxis);
 
             e.StartParameter = sp;
@@ -463,7 +465,7 @@ namespace CADability.DXF
             return e;
         }
 
-        private double CalcStartEndParameter(Vector2 startEndPoint, double majorAxis, double minorAxis)
+        private double CalcStartEndParameter(XY startEndPoint, double majorAxis, double minorAxis)
         {
             double a = 1 / (0.5 * majorAxis);
             double b = 1 / (0.5 * minorAxis);
