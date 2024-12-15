@@ -586,16 +586,16 @@ namespace CADability.DXF
             return null;
         }
 
-        private IGeoObject CreateFace(netDxf.Entities.Face3D face)
+        private IGeoObject CreateFace(ACadSharp.Entities.Face3D face)
         {
             List<GeoPoint> points = new List<GeoPoint>();
-            GeoPoint p = GeoPoint(face.FirstVertex);
+            GeoPoint p = new GeoPoint(face.FirstCorner.X, face.FirstCorner.Y, face.FirstCorner.Z);
             points.Add(p);
-            p = GeoPoint(face.SecondVertex);
+            p = new GeoPoint(face.SecondCorner.X, face.SecondCorner.Y, face.SecondCorner.Z);
             if (points[points.Count - 1] != p) points.Add(p);
-            p = GeoPoint(face.ThirdVertex);
+            p = new GeoPoint(face.ThirdCorner.X, face.ThirdCorner.Y, face.ThirdCorner.Z);
             if (points[points.Count - 1] != p) points.Add(p);
-            p = GeoPoint(face.FourthVertex);
+            p = new GeoPoint(face.FourthCorner.X, face.FourthCorner.Y, face.FourthCorner.Z);
             if (points[points.Count - 1] != p) points.Add(p);
             if (points.Count == 3)
             {
