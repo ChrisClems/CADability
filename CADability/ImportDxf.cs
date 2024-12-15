@@ -650,8 +650,8 @@ namespace CADability.DXF
             GeoPoint[] vertices = new GeoPoint[exploded.Length];
             for (int i = 0; i < vertices.Length; i++)
             {
-                XYZ vert = (XYZ)exploded[i];
-                vertices[i] = new GeoPoint(vert.X, vert.Y, vert.Z); // there is more information, I would need a good example
+                ACadSharp.Entities.Vertex vert = (ACadSharp.Entities.Vertex)exploded[i];
+                vertices[i] = new GeoPoint(vert.Location.X, vert.Location.Y, vert.Location.Z); // there is more information, I would need a good example
             }
 
             List<Face> faces = new List<Face>();
