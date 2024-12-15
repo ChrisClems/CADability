@@ -643,20 +643,22 @@ namespace CADability.DXF
             return null;
 
         }
-        private IGeoObject CreatePolyfaceMesh(netDxf.Entities.PolyfaceMesh polyfacemesh)
+        private IGeoObject CreatePolyfaceMesh(ACadSharp.Entities.PolyfaceMesh polyfacemesh)
         {
-            polyfacemesh.Explode();
+            Entity[] exploded = polyfacemesh.Explode().ToArray();
 
-            GeoPoint[] vertices = new GeoPoint[polyfacemesh.Vertexes.Length];
+            GeoPoint[] vertices = new GeoPoint[exploded.Length];
             for (int i = 0; i < vertices.Length; i++)
             {
-                vertices[i] = GeoPoint(polyfacemesh.Vertexes[i]); // there is more information, I would need a good example
+                XYZ vert = (XYZ)exploded[i];
+                vertices[i] = new GeoPoint(vert.X, vert.Y, vert.Z); // there is more information, I would need a good example
             }
 
             List<Face> faces = new List<Face>();
             for (int i = 0; i < polyfacemesh.Faces.Count; i++)
             {
-                short[] indices = polyfacemesh.Faces[i].VertexIndexes;
+                
+                short[] indices = {polyfacemesh.Faces[i].Index1, polyfacemesh.Faces[i].Index2, polyfacemesh.Faces[i].Index3, polyfacemesh.Faces[i].Index4};
                 for (int j = 0; j < indices.Length; j++)
                 {
                     indices[j] = (short)(Math.Abs(indices[j]) - 1); // why? what does it mean?
