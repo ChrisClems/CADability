@@ -4,6 +4,7 @@ using MathNet.Numerics.LinearAlgebra.Factorization;
 using MathNet.Numerics.LinearAlgebra.Double;
 using System;
 using System.Collections;
+using System.Linq;
 using System.Runtime.Serialization;
 
 namespace CADability
@@ -285,6 +286,7 @@ namespace CADability
                     double d = Math.Abs(plane.Distance(points[i]));
                     if (d > maxDistance) maxDistance = d;
                 }
+                if (plane.Normal.z < 0 && points.All(point => point.z == 0.0)) plane.Reverse();
                 return plane;
             }
             isLinear = true;
