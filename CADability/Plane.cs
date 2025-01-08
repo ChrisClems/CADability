@@ -162,7 +162,6 @@ namespace CADability
                 {   // two very common cases
                     if (normal.z > 0) coordSys = new CoordSys(location, GeoVector.XAxis, GeoVector.YAxis);
                     else coordSys = new CoordSys(location, GeoVector.YAxis, GeoVector.XAxis);
-                    //coordSys = new CoordSys(location, GeoVector.XAxis, GeoVector.YAxis);
                 }
                 else
                 {
@@ -287,7 +286,6 @@ namespace CADability
                     double d = Math.Abs(plane.Distance(points[i]));
                     if (d > maxDistance) maxDistance = d;
                 }
-                //if (plane.Normal.z < 0) plane.Reverse();
                 return plane;
             }
             isLinear = true;
