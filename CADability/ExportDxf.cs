@@ -424,6 +424,9 @@ namespace CADability.DXF
             {
                 Plane dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
                 if (!elli.CounterClockWise) (elli.StartPoint, elli.EndPoint) = (elli.EndPoint, elli.StartPoint);
+                // Plane dxfPlane;
+                // if (elli.CounterClockWise) dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
+                // else dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(-elli.Plane.Normal));
                 if (elli.IsCircle)
                 {
                     GeoObject.Ellipse aligned = GeoObject.Ellipse.Construct();
