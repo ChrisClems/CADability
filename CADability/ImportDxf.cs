@@ -22,6 +22,7 @@ using ACadSharp.Objects;
 using ACadSharp.Tables;
 using CSMath;
 using Color = ACadSharp.Color;
+using Path = System.IO.Path;
 using Polyline2D = ACadSharp.Entities.Polyline2D;
 using Solid = ACadSharp.Entities.Solid;
 
@@ -969,9 +970,9 @@ namespace CADability.DXF
             // and maybe some more, is there a documentation?
             return sb.ToString();
         }
-        private IGeoObject CreateText(netDxf.Entities.Text txt)
+        private IGeoObject CreateText(ACadSharp.Entities.TextEntity txt)
         {
-            GeoObject.Text text = GeoObject.Text.Construct();
+            Text text = GeoObject.Text.Construct();
             string txtstring = processAcadString(txt.Value);
             if (txtstring.Trim().Length == 0) return null;
             string filename;
@@ -979,16 +980,16 @@ namespace CADability.DXF
             string typeface;
             bool bold;
             bool italic;
-            filename = txt.Style.FontFamilyName;
-            if (string.IsNullOrEmpty(filename)) filename = txt.Style.FontFile;
+            filename = txt.Style.Filename;
             name = txt.Style.Name;
             typeface = "";
-            bold = txt.Style.FontStyle.HasFlag(netDxf.Tables.FontStyle.Bold);
-            italic = txt.Style.FontStyle.HasFlag(netDxf.Tables.FontStyle.Italic);
-            GeoPoint pos = GeoPoint(txt.Position);
+            bold = txt.Style.TrueType.HasFlag(FontFlags.Bold);
+            italic = txt.Style.TrueType.HasFlag(FontFlags.Italic);
+            GeoPoint insertionPoint = new GeoPoint(txt.InsertPoint.X, txt.InsertPoint.Y, txt.InsertPoint.Z);
+            GeoVector normal = new GeoVector(txt.Normal.X, txt.Normal.Y, txt.Normal.Z);
             Angle a = Angle.Deg(txt.Rotation);
             double h = txt.Height;
-            Plane plane = Plane(txt.Position, txt.Normal);
+            Plane plane = new Plane(insertionPoint, normal);
 
             bool isShx = false;
             if (typeface.Length > 0)
@@ -997,15 +998,15 @@ namespace CADability.DXF
             }
             else
             {
-                if (filename.EndsWith(".shx") || filename.EndsWith(".SHX"))
+                if (Path.GetExtension(filename).ToLower() == ".shx")
                 {
-                    filename = filename.Substring(0, filename.Length - 4);
+                    filename = Path.GetFileNameWithoutExtension(filename);
                     isShx = true;
                 }
-                if (filename.EndsWith(".ttf") || filename.EndsWith(".TTF"))
+                if (Path.GetExtension(filename).ToLower() == ".ttf")
                 {
                     if (name != null && name.Length > 1) filename = name;
-                    else filename = filename.Substring(0, filename.Length - 4);
+                    else filename = Path.GetFileNameWithoutExtension(filename);
                 }
                 text.Font = filename;
             }
@@ -1016,67 +1017,53 @@ namespace CADability.DXF
             text.LineDirection = h * CADability.GeoVector.XAxis; //plane.ToGlobal(new GeoVector2D(a));
             text.GlyphDirection = h * CADability.GeoVector.YAxis; // plane.ToGlobal(new GeoVector2D(a + SweepAngle.ToLeft));
             text.TextSize = h;
-            text.Alignment = GeoObject.Text.AlignMode.Bottom;
-            text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-            switch (txt.Alignment)
+            text.Alignment = Text.AlignMode.Bottom;
+            text.LineAlignment = Text.LineAlignMode.Left;
+            txt.HorizontalAlignment = TextHorizontalAlignment.Left;
+
+            switch (txt.HorizontalAlignment)
             {
-                case TextAlignment.Aligned:
-                case TextAlignment.Fit: // fit in width or height: not implemented
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-                    text.Alignment = GeoObject.Text.AlignMode.Baseline;
+                case TextHorizontalAlignment.Left:
+                    text.LineAlignment = Text.LineAlignMode.Left;
                     break;
-                case TextAlignment.BaselineLeft:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-                    text.Alignment = GeoObject.Text.AlignMode.Baseline;
+                case TextHorizontalAlignment.Center:
+                    text.LineAlignment = Text.LineAlignMode.Center;
                     break;
-                case TextAlignment.BaselineCenter:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Center;
-                    text.Alignment = GeoObject.Text.AlignMode.Baseline;
+                case TextHorizontalAlignment.Right:
+                    text.LineAlignment = Text.LineAlignMode.Right;
                     break;
-                case TextAlignment.BaselineRight:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Right;
-                    text.Alignment = GeoObject.Text.AlignMode.Baseline;
+                case TextHorizontalAlignment.Aligned:
+                    text.LineAlignment = Text.LineAlignMode.Left;
                     break;
-                case TextAlignment.BottomLeft:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-                    text.Alignment = GeoObject.Text.AlignMode.Bottom;
+                case TextHorizontalAlignment.Middle:
+                    text.LineAlignment = Text.LineAlignMode.Center;
                     break;
-                case TextAlignment.BottomCenter:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Center;
-                    text.Alignment = GeoObject.Text.AlignMode.Bottom;
+                case TextHorizontalAlignment.Fit:
+                    text.LineAlignment = Text.LineAlignMode.Left;
                     break;
-                case TextAlignment.BottomRight:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Right;
-                    text.Alignment = GeoObject.Text.AlignMode.Bottom;
-                    break;
-                case TextAlignment.MiddleLeft:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-                    text.Alignment = GeoObject.Text.AlignMode.Center;
-                    break;
-                case TextAlignment.Middle:
-                case TextAlignment.MiddleCenter:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Center;
-                    text.Alignment = GeoObject.Text.AlignMode.Center;
-                    break;
-                case TextAlignment.MiddleRight:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Right;
-                    text.Alignment = GeoObject.Text.AlignMode.Center;
-                    break;
-                case TextAlignment.TopLeft:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Left;
-                    text.Alignment = GeoObject.Text.AlignMode.Top;
-                    break;
-                case TextAlignment.TopCenter:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Center;
-                    text.Alignment = GeoObject.Text.AlignMode.Top;
-                    break;
-                case TextAlignment.TopRight:
-                    text.LineAlignment = GeoObject.Text.LineAlignMode.Right;
-                    text.Alignment = GeoObject.Text.AlignMode.Top;
-                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
             }
-            // h /= GetFontScaling(text.Font, fnt);
-            text.Location = GeoPoint(txt.Position);
+
+            switch (txt.VerticalAlignment)
+            {
+                case TextVerticalAlignmentType.Baseline:
+                    text.Alignment = Text.AlignMode.Baseline;
+                    break;
+                case TextVerticalAlignmentType.Bottom:
+                    text.Alignment = Text.AlignMode.Bottom;
+                    break;
+                case TextVerticalAlignmentType.Middle:
+                    text.Alignment = Text.AlignMode.Center;
+                    break;
+                case TextVerticalAlignmentType.Top:
+                    text.Alignment = Text.AlignMode.Top;
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+
+            text.Location = new GeoPoint(txt.InsertPoint.X, txt.InsertPoint.Y, txt.InsertPoint.Z);
             GeoVector2D dir2d = new GeoVector2D(a);
             GeoVector linedir = plane.ToGlobal(dir2d);
             GeoVector glyphdir = plane.ToGlobal(dir2d.ToLeft());
@@ -1086,7 +1073,7 @@ namespace CADability.DXF
             //if (isShx) h *= AdditionalShxFactor(text.Font);
             linedir.Length = h * txt.WidthFactor;
             if (!linedir.IsNullVector()) text.LineDirection = linedir;
-            if (text.TextSize < 1e-5) return null;
+            if (text.TextSize < Precision.eps) return null;
             return text;
         }
         private IGeoObject CreateDimension(netDxf.Entities.Dimension dimension)
