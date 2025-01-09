@@ -18,6 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Numerics;
 using ACadSharp.Entities;
+using ACadSharp.Objects;
 using CSMath;
 using Color = ACadSharp.Color;
 using Polyline2D = ACadSharp.Entities.Polyline2D;
@@ -347,19 +348,20 @@ namespace CADability.DXF
             }
             go.UserData["DxfImport.Handle"] = new UserInterface.StringProperty(entity.Handle, "DxfImport.Handle");
         }
-        private GeoObject.Block FindBlock(netDxf.Blocks.Block entity)
+        private GeoObject.Block FindBlock(ACadSharp.Blocks.Block entity)
         {
-            if (!blockTable.TryGetValue(entity.Handle, out GeoObject.Block found))
+            if (!blockTable.TryGetValue(entity.Handle.ToString(), out GeoObject.Block found))
             {
                 found = GeoObject.Block.Construct();
                 found.Name = entity.Name;
-                found.RefPoint = GeoPoint(entity.Origin);
-                for (int i = 0; i < entity.Entities.Count; i++)
+                found.RefPoint = new GeoPoint(entity.BasePoint.X, entity.BasePoint.Y, entity.BasePoint.Z);
+                List<CadObject> entities = entity.Reactors.Values.ToList();
+                for (int i = 0; i < entities.Count; i++)
                 {
-                    IGeoObject go = GeoObjectFromEntity(entity.Entities[i]);
+                    IGeoObject go = GeoObjectFromEntity(entities[i]);
                     if (go != null) found.Add(go);
                 }
-                blockTable[entity.Handle] = found;
+                blockTable[entity.Handle.ToString()] = found;
             }
             return found;
         }
@@ -863,17 +865,17 @@ namespace CADability.DXF
             hatch.Plane = pln;
             return hatch;
         }
-        private IGeoObject CreateInsert(netDxf.Entities.Insert insert)
+        private IGeoObject CreateInsert(ACadSharp.Entities.Insert insert)
         {
             // could also use insert.Explode()
-            GeoObject.Block block = FindBlock(insert.Block);
+            GeoObject.Block block = FindBlock(insert.Block.BlockEntity);
             if (block != null)
             {
                 IGeoObject res = block.Clone();
-                ModOp tranform = ModOp.Translate(GeoVector(insert.Position)) *
+                ModOp tranform = ModOp.Translate(new GeoVector(insert.InsertPoint.X, insert.InsertPoint.Y, insert.InsertPoint.Z)) *
                     //ModOp.Translate(block.RefPoint.ToVector()) *
                     ModOp.Rotate(CADability.GeoVector.ZAxis, SweepAngle.Deg(insert.Rotation)) *
-                    ModOp.Scale(insert.Scale.X, insert.Scale.Y, insert.Scale.Z) *
+                    ModOp.Scale(insert.XScale, insert.YScale, insert.ZScale) *
                     ModOp.Translate(CADability.GeoPoint.Origin - block.RefPoint);
                 res.Modify(tranform);
                 return res;
