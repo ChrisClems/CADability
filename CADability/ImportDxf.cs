@@ -2,8 +2,6 @@
 using System.Collections.Generic;
 using System.ComponentModel;
 using ACadSharp;
-using netDxf;
-using netDxf.Entities;
 using CADability.GeoObject;
 using CADability.Shapes;
 using CADability.Curve2D;
@@ -36,14 +34,11 @@ namespace CADability.DXF
     /// </summary>
     public class Import
     {
-        private DxfDocument doc;
-        private ACadSharp.CadDocument acadDoc;
+        private ACadSharp.CadDocument doc;
         private Project project;
         private Dictionary<string, GeoObject.Block> blockTable;
-        private Dictionary<netDxf.Tables.Layer, ColorDef> layerColorTable;
-        private Dictionary<ACadSharp.Tables.Layer, Color> acadLayerColorTable;
-        private Dictionary<netDxf.Tables.Layer, Attribute.Layer> layerTable;
-        private Dictionary<ACadSharp.Tables.Layer, Attribute.Layer> acadLayerTable;
+        private Dictionary<ACadSharp.Tables.Layer, ColorDef> layerColorTable;
+        private Dictionary<ACadSharp.Tables.Layer, Attribute.Layer> layerTable;
         /// <summary>
         /// Create the Import instance. The document is being read and converted to netDXF objects.
         /// </summary>
@@ -54,7 +49,7 @@ namespace CADability.DXF
             {
                 // MathHelper.Epsilon = 1e-8;
                 // doc = DxfDocument.Load(stream);
-                acadDoc = ACadSharp.IO.DxfReader.Read(stream);
+                doc = ACadSharp.IO.DxfReader.Read(stream);
             }
         }
         public static bool CanImportVersion(string fileName)
@@ -74,7 +69,7 @@ namespace CADability.DXF
             // }
             // model.Name = "*Model_Space";
 
-            var entities = acadDoc.ModelSpace.Entities;
+            var entities = doc.ModelSpace.Entities;
             foreach (Entity entity in entities)
             {
                 IGeoObject geoObject = GeoObjectFromEntity(entity);
@@ -91,7 +86,7 @@ namespace CADability.DXF
             //     if (geoObject != null) model.Add(geoObject);
             // }
             
-            var entities = acadDoc.PaperSpace.Entities;
+            var entities = doc.PaperSpace.Entities;
             foreach (Entity entity in entities)
             {
                 IGeoObject geoObject = GeoObjectFromEntity(entity);
@@ -108,25 +103,29 @@ namespace CADability.DXF
             if (doc == null) return null;
             project = Project.CreateSimpleProject();
             blockTable = new Dictionary<string, GeoObject.Block>();
-            layerColorTable = new Dictionary<netDxf.Tables.Layer, ColorDef>();
-            layerTable = new Dictionary<netDxf.Tables.Layer, Attribute.Layer>();
+            layerColorTable = new Dictionary<ACadSharp.Tables.Layer, ColorDef>();
+            layerTable = new Dictionary<ACadSharp.Tables.Layer, Attribute.Layer>();
             foreach (var item in doc.Layers)
             {
                 Attribute.Layer layer = project.LayerList.CreateOrFind(item.Name);
                 layerTable[item] = layer;
-                Color rgb = item.Color.ToColor();
-                if (rgb.ToArgb() == Color.White.ToArgb()) rgb = Color.Black;
-                ColorDef cd = project.ColorList.CreateOrFind(item.Name + ":ByLayer", rgb);
+                Color rgb = new Color(item.Color.R, item.Color.G, item.Color.B);
+                Color white = new Color(255, 255, 255);
+                Color black = new Color(0, 0, 0);
+                if (rgb.Equals(white)) rgb = black;
+                System.Drawing.Color sysColor = System.Drawing.Color.FromArgb(255, rgb.R, rgb.G, rgb.B);
+                ColorDef cd = project.ColorList.CreateOrFind(item.Name + ":ByLayer", sysColor);
                 layerColorTable[item] = cd;
             }
-            foreach (var item in doc.Linetypes)
+            foreach (var item in doc.LineTypes)
             {
+                var segments = item.Segments.ToList();
                 List<double> pattern = new List<double>();
-                for (int i = 0; i < item.Segments.Count; i++)
+                for (int i = 0; i < segments.Count; i++)
                 {
-                    if (item.Segments[i].Type == LinetypeSegmentType.Simple)
+                    if (segments[i].Shapeflag == LinetypeShapeFlags.None)
                     {
-                        pattern.Add(Math.Abs(item.Segments[i].Length));
+                        pattern.Add(Math.Abs(segments[i].Length));
                     }
                 }
                 project.LinePatternList.CreateOrFind(item.Name, pattern.ToArray());
@@ -166,15 +165,18 @@ namespace CADability.DXF
                 case ACadSharp.Entities.Hatch dxfHatch: res = CreateHatch(dxfHatch); break;
                 case ACadSharp.Entities.Solid dxfSolid: res = CreateSolid(dxfSolid); break;
                 case ACadSharp.Entities.Insert dxfInsert: res = CreateInsert(dxfInsert); break;
-                case ACadSharp.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
+                //case ACadSharp.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
                 case ACadSharp.Entities.MLine dxfMLine: res = CreateMLine(dxfMLine); break;
                 case ACadSharp.Entities.TextEntity dxfText: res = CreateText(dxfText); break;
                 case ACadSharp.Entities.Dimension dxfDimension: res = CreateDimension(dxfDimension); break;
                 case ACadSharp.Entities.MText dxfMText: res = CreateMText(dxfMText); break;
                 case ACadSharp.Entities.Leader dxfLeader: res = CreateLeader(dxfLeader); break;
-                case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
+                //case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
                 case ACadSharp.Entities.Point dxfPoint: res = CreatePoint(dxfPoint); break;
                 case ACadSharp.Entities.Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
+                case ACadSharp.Entities.Polyline polyline: res = CreateExplodedPolyline(polyline); break;
+                case ACadSharp.Entities.LwPolyline lwPolyline: res = CreateExplodedPolyline(lwPolyline); break;
+                        
                 default:
                     System.Diagnostics.Trace.WriteLine("dxf: not imported: " + item.ToString());
                     break;
@@ -229,14 +231,14 @@ namespace CADability.DXF
         }
         private HatchStyleLines FindOrCreateHatchStyleLines(ACadSharp.Entities.Entity entity, double lineAngle, double lineDistance, double[] dashes)
         {
-            var entColor = System.Drawing.Color.FromArgb(0, entity.Color.R, entity.Color.G, entity.Color.B);
+            var entColor = System.Drawing.Color.FromArgb(255, entity.Color.R, entity.Color.G, entity.Color.B);
             for (int i = 0; i < project.HatchStyleList.Count; i++)
             {
                 if (project.HatchStyleList[i] is HatchStyleLines hsl)
                 {
                     // TODO: Create PR to produce portable RGB values from ColorDef
                     // Ignore alpha channel. Not supported by ACadSharp
-                    entColor = System.Drawing.Color.FromArgb(hsl.ColorDef.Color.A, entColor.R, entColor.G, entColor.B);
+                    entColor = System.Drawing.Color.FromArgb(255, entColor.R, entColor.G, entColor.B);
                     if (hsl.ColorDef.Color.ToArgb() == entColor.ToArgb() && (Math.Abs(hsl.LineAngle) - Math.Abs(lineAngle) < Precision.eps) && Math.Abs(hsl.LineDistance) - Math.Abs(lineDistance) < Precision.eps) return hsl;
                 }
             }
@@ -899,9 +901,9 @@ namespace CADability.DXF
             }
             return null;
         }
-        private IGeoObject CreatePolyline2D(netDxf.Entities.Polyline2D polyline2D)
+        private IGeoObject CreateExplodedPolyline(ACadSharp.Entities.IPolyline polyline)
         {
-            List<EntityObject> exploded = polyline2D.Explode();
+            List<Entity> exploded = polyline.Explode().ToList();
             List<IGeoObject> path = new List<IGeoObject>();
             for (int i = 0; i < exploded.Count; i++)
             {
@@ -909,7 +911,7 @@ namespace CADability.DXF
                 if (ent != null) path.Add(ent);
             }
             GeoObject.Path go = GeoObject.Path.Construct();
-            go.Set(new GeoObjectList(path), false, 1e-6);
+            go.Set(new GeoObjectList(path), false, Precision.eps);
             if (go.CurveCount > 0) return go;
             return null;
         }
@@ -1137,39 +1139,53 @@ namespace CADability.DXF
             blk.Add(pln);
             return blk;
         }
-        private IGeoObject CreatePolyline3D(netDxf.Entities.Polyline3D polyline3D)
-        {
-            // polyline.Explode();
-            bool hasWidth = false, hasBulges = false;
-            for (int i = 0; i < polyline3D.Vertexes.Count; i++)
-            {
-                //hasBulges |= polyline.Vertexes[i].Bulge != 0.0;
-                //hasWidth |= (polyline.Vertexes[i].StartWidth != 0.0) || (polyline.Vertexes[i].EndWidth != 0.0);
-            }
-            if (hasWidth && !hasBulges)
-            {
-
-            }
-            else
-            {
-                if (hasBulges)
-                {   // must be in a single plane
-
-                }
-                else
-                {
-                    GeoObject.Polyline res = GeoObject.Polyline.Construct();
-                    for (int i = 0; i < polyline3D.Vertexes.Count; ++i)
-                    {
-                        res.AddPoint(GeoPoint(polyline3D.Vertexes[i]));
-                    }
-                    res.IsClosed = polyline3D.IsClosed;
-                    if (res.GetExtent(0.0).Size < 1e-6) return null; // only identical points
-                    return res;
-                }
-            }
-            return null;
-        }
+        // private IGeoObject CreatePolyline2D(ACadSharp.Entities.Polyline2D polyline2D)
+        // {
+        //     List<CadObject> exploded = polyline2D.Explode();
+        //     List<IGeoObject> path = new List<IGeoObject>();
+        //     for (int i = 0; i < exploded.Count; i++)
+        //     {
+        //         IGeoObject ent = GeoObjectFromEntity(exploded[i]);
+        //         if (ent != null) path.Add(ent);
+        //     }
+        //     GeoObject.Path go = GeoObject.Path.Construct();
+        //     go.Set(new GeoObjectList(path), false, 1e-6);
+        //     if (go.CurveCount > 0) return go;
+        //     return null;
+        // }
+        // private IGeoObject CreatePolyline3D(netDxf.Entities.Polyline3D polyline3D)
+        // {
+        //     // polyline.Explode();
+        //     bool hasWidth = false, hasBulges = false;
+        //     for (int i = 0; i < polyline3D.Vertexes.Count; i++)
+        //     {
+        //         //hasBulges |= polyline.Vertexes[i].Bulge != 0.0;
+        //         //hasWidth |= (polyline.Vertexes[i].StartWidth != 0.0) || (polyline.Vertexes[i].EndWidth != 0.0);
+        //     }
+        //     if (hasWidth && !hasBulges)
+        //     {
+        //
+        //     }
+        //     else
+        //     {
+        //         if (hasBulges)
+        //         {   // must be in a single plane
+        //
+        //         }
+        //         else
+        //         {
+        //             GeoObject.Polyline res = GeoObject.Polyline.Construct();
+        //             for (int i = 0; i < polyline3D.Vertexes.Count; ++i)
+        //             {
+        //                 res.AddPoint(GeoPoint(polyline3D.Vertexes[i]));
+        //             }
+        //             res.IsClosed = polyline3D.IsClosed;
+        //             if (res.GetExtent(0.0).Size < 1e-6) return null; // only identical points
+        //             return res;
+        //         }
+        //     }
+        //     return null;
+        // }
         private IGeoObject CreatePoint(ACadSharp.Entities.Point point)
         {
             CADability.GeoObject.Point p = CADability.GeoObject.Point.Construct();
