@@ -19,6 +19,7 @@ using System.Numerics;
 using ACadSharp.Entities;
 using ACadSharp.Objects;
 using ACadSharp.Tables;
+using ACadSharp.XData;
 using CSMath;
 using Color = ACadSharp.Color;
 using Path = System.IO.Path;
@@ -149,7 +150,7 @@ namespace CADability.DXF
             doc = null;
             return project;
         }
-        private IGeoObject GeoObjectFromEntity(ACadSharp.CadObject item)
+        private IGeoObject GeoObjectFromEntity(ACadSharp.Entities.Entity item)
         {
             IGeoObject res = null;
             switch (item)
@@ -165,17 +166,19 @@ namespace CADability.DXF
                 case ACadSharp.Entities.Hatch dxfHatch: res = CreateHatch(dxfHatch); break;
                 case ACadSharp.Entities.Solid dxfSolid: res = CreateSolid(dxfSolid); break;
                 case ACadSharp.Entities.Insert dxfInsert: res = CreateInsert(dxfInsert); break;
-                //case ACadSharp.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
                 case ACadSharp.Entities.MLine dxfMLine: res = CreateMLine(dxfMLine); break;
                 case ACadSharp.Entities.TextEntity dxfText: res = CreateText(dxfText); break;
                 case ACadSharp.Entities.Dimension dxfDimension: res = CreateDimension(dxfDimension); break;
                 case ACadSharp.Entities.MText dxfMText: res = CreateMText(dxfMText); break;
                 case ACadSharp.Entities.Leader dxfLeader: res = CreateLeader(dxfLeader); break;
-                //case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
                 case ACadSharp.Entities.Point dxfPoint: res = CreatePoint(dxfPoint); break;
                 case ACadSharp.Entities.Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
-                case ACadSharp.Entities.Polyline polyline: res = CreateExplodedPolyline(polyline); break;
-                case ACadSharp.Entities.LwPolyline lwPolyline: res = CreateExplodedPolyline(lwPolyline); break;
+                case ACadSharp.Entities.IPolyline polyline: res = CreateExplodedPolyline(polyline); break; // Does this import LwPolyline?
+                //case ACadSharp.Entities.LwPolyline lwPolyline: res = CreateExplodedPolyline(lwPolyline); break; // Is this needed?
+                // Polyline import as exploded geometry streamlined with CreateExplodedPolyline
+                // TODO: Revisit polyline importing for enhancements or potential polyline-to-polyline imports
+                //case ACadSharp.Entities.Polyline2D dxfPolyline2D: res = CreatePolyline2D(dxfPolyline2D); break;
+                //case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
                         
                 default:
                     System.Diagnostics.Trace.WriteLine("dxf: not imported: " + item.ToString());
@@ -185,7 +188,7 @@ namespace CADability.DXF
             {
                 SetAttributes(res, item);
                 SetUserData(res, item);
-                res.IsVisible = item.IsVisible;
+                res.IsVisible = !item.IsInvisible;
             }
             return res;
         }
@@ -220,12 +223,14 @@ namespace CADability.DXF
             {
                 if (project.HatchStyleList[i] is HatchStyleSolid hss)
                 {
-                    if (hss.Color.Color.ToArgb() == clr.ToArgb()) return hss;
+                    Color hssColor = new Color(hss.Color.Color.R, hss.Color.Color.G, hss.Color.Color.B);
+                    if (hssColor.Equals(clr)) return hss;
                 }
             }
             HatchStyleSolid nhss = new HatchStyleSolid();
             nhss.Name = "Solid_" + clr.ToString();
-            nhss.Color = project.ColorList.CreateOrFind(clr.ToString(), clr);
+            var sysClr = System.Drawing.Color.FromArgb(255, clr.R, clr.G, clr.B);
+            nhss.Color = project.ColorList.CreateOrFind(clr.ToString(), sysClr);
             project.HatchStyleList.Add(nhss);
             return nhss;
         }
@@ -268,18 +273,17 @@ namespace CADability.DXF
             project.HatchStyleList.Add(nhsl);
             return nhsl;
         }
-        private ColorDef FindOrCreateColor(AciColor color, netDxf.Tables.Layer layer)
+        private ColorDef FindOrCreateColor(ACadSharp.Color color, ACadSharp.Tables.Layer layer)
         {
             if (color.IsByLayer && layer != null)
             {
                 ColorDef res = layerColorTable[layer] as ColorDef;
                 if (res != null) return res;
             }
-            Color rgb = color.ToColor();
-            if (color.ToColor().ToArgb() == Color.White.ToArgb())
-            {
-                rgb = Color.Black;
-            }
+            Color rgb = new Color(color.R, color.G, color.B);
+            Color white = new Color(255, 255, 255);
+            Color black = new Color(0, 0, 0);
+            if (rgb.Equals(white)) rgb = black;
             string colorname = rgb.ToString();
             return project.ColorList.CreateOrFind(colorname, rgb);
         }
@@ -336,7 +340,7 @@ namespace CADability.DXF
             }
             return new LinePattern(NewName("DXFpattern", project.LinePatternList), dashes);
         }
-        private void SetAttributes(IGeoObject go, netDxf.Entities.EntityObject entity)
+        private void SetAttributes(IGeoObject go, ACadSharp.Entities.Entity entity)
         {
             if (go is IColorDef cd) cd.ColorDef = FindOrCreateColor(entity.Color, entity.Layer);
             go.Layer = layerTable[entity.Layer];
@@ -350,18 +354,18 @@ namespace CADability.DXF
                 ld.LineWidth = project.LineWidthList.CreateOrFind("DXF_" + lw.ToString(), ((int)lw) / 100.0);
             }
         }
-        private void SetUserData(IGeoObject go, netDxf.Entities.EntityObject entity)
+        private void SetUserData(IGeoObject go, ACadSharp.Entities.Entity entity)
         {
-            foreach (KeyValuePair<string, XData> item in entity.XData)
+            foreach (KeyValuePair<AppId, ExtendedData> item in entity.ExtendedData.Entries)
             {
                 ExtendedEntityData xdata = new ExtendedEntityData();
-                xdata.ApplicationName = item.Value.ApplicationRegistry.Name;
+                xdata.ApplicationName = item.Value.AppId.Name;
 
-                string name = item.Value.ApplicationRegistry.Name + ":" + item.Key;
+                string name = item.Value.AppId.Name + ":" + item.Key;
 
-                for (int i = 0; i < item.Value.XDataRecord.Count; i++)
+                foreach (var record in item.Value.Records)
                 {
-                    xdata.Data.Add(new KeyValuePair<XDataCode, object>(item.Value.XDataRecord[i].Code, item.Value.XDataRecord[i].Value));
+                    xdata.Data.Add(new KeyValuePair<DxfCode, object>(record.Code, record.Value));
                 }
 
                 go.UserData.Add(name, xdata);
