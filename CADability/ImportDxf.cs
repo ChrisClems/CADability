@@ -911,9 +911,9 @@ namespace CADability.DXF
             if (go.CurveCount > 0) return go;
             return null;
         }
-        private IGeoObject CreateMLine(netDxf.Entities.MLine mLine)
+        private IGeoObject CreateMLine(ACadSharp.Entities.MLine mLine)
         {
-            List<EntityObject> exploded = mLine.Explode();
+            List<CadObject> exploded = mLine.Reactors.Values.ToList();
             List<IGeoObject> path = new List<IGeoObject>();
             for (int i = 0; i < exploded.Count; i++)
             {
