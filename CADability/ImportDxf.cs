@@ -285,7 +285,8 @@ namespace CADability.DXF
             Color black = new Color(0, 0, 0);
             if (rgb.Equals(white)) rgb = black;
             string colorname = rgb.ToString();
-            return project.ColorList.CreateOrFind(colorname, rgb);
+            var sysClr = System.Drawing.Color.FromArgb(255, color.R, color.G, color.B);
+            return project.ColorList.CreateOrFind(colorname, sysClr);
         }
         private string NewName(string prefix, IAttributeList list)
         {
@@ -379,7 +380,7 @@ namespace CADability.DXF
                 found = GeoObject.Block.Construct();
                 found.Name = entity.Name;
                 found.RefPoint = new GeoPoint(entity.BasePoint.X, entity.BasePoint.Y, entity.BasePoint.Z);
-                List<CadObject> entities = entity.Reactors.Values.ToList();
+                List<Entity> entities = entity.Reactors.Values.ToList();
                 for (int i = 0; i < entities.Count; i++)
                 {
                     IGeoObject go = GeoObjectFromEntity(entities[i]);
