@@ -1076,13 +1076,13 @@ namespace CADability.DXF
             if (text.TextSize < Precision.eps) return null;
             return text;
         }
-        private IGeoObject CreateDimension(netDxf.Entities.Dimension dimension)
+        private IGeoObject CreateDimension(ACadSharp.Entities.Dimension dimension)
         {
             // we could create a CADability Dimension object usind the dimension data and setting the block with the FindBlock values.
             // but then we would need a "CustomBlock" flag in the CADability Dimension object and also save this Block
             if (dimension.Block != null)
             {
-                GeoObject.Block block = FindBlock(dimension.Block);
+                GeoObject.Block block = FindBlock(dimension.Block.BlockEntity);
                 if (block != null)
                 {
                     IGeoObject res = block.Clone();
@@ -1095,7 +1095,7 @@ namespace CADability.DXF
             }
             return null;
         }
-        private IGeoObject CreateMText(netDxf.Entities.MText mText)
+        private IGeoObject CreateMText(ACadSharp.Entities.MText mText)
         {
             // this has to be splitted in chunks (see sourcecode in dwgmtext.cpp) we could implement a MText to List<Text> method in netDxf library
             netDxf.Entities.Text txt = new netDxf.Entities.Text()
