@@ -1,17 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using netDxf;
+using ACadSharp;
 
 namespace CADability.DXF
 {    public class ExtendedEntityData : IJsonSerialize
     {
 
         public string ApplicationName { get; set; }
-        public List<KeyValuePair<XDataCode, object>> Data { get; private set; }
+        public List<KeyValuePair<DxfCode, object>> Data { get; private set; }
 
         public ExtendedEntityData()
         {
-            Data = new List<KeyValuePair<XDataCode, object>>();
+            Data = new List<KeyValuePair<DxfCode, object>>();
         }
 
 
@@ -36,7 +36,7 @@ namespace CADability.DXF
             List<object> values = data.GetProperty<List<object>>("Values");
             for (int i = 0; i < keys.Count; i++)
             {
-                Data.Add(new KeyValuePair<XDataCode, object>((XDataCode)(int)(double)(keys[i]), values[i]));
+                Data.Add(new KeyValuePair<DxfCode, object>((DxfCode)(int)(double)(keys[i]), values[i]));
             }
         }
     }
