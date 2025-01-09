@@ -1097,38 +1097,39 @@ namespace CADability.DXF
         }
         private IGeoObject CreateMText(ACadSharp.Entities.MText mText)
         {
-            // this has to be splitted in chunks (see sourcecode in dwgmtext.cpp) we could implement a MText to List<Text> method in netDxf library
-            netDxf.Entities.Text txt = new netDxf.Entities.Text()
+            // TODO: Support importing real MText either through stacking single text GeoObjects or adding multi-line support to CADAbility
+            ACadSharp.Entities.TextEntity txt = new ACadSharp.Entities.TextEntity()
             {
-                Value = mText.PlainText(),
+                Value = mText.Value.Replace(@"\P", " "),
                 Height = mText.Height,
-                // Width = mText.Height, // width is not used in CreateText (should be used for align.fit) but may not be 0
                 WidthFactor = 1.0,
                 Rotation = mText.Rotation,
                 ObliqueAngle = mText.Style.ObliqueAngle,
                 // IsBackward = false,
                 // IsUpsideDown = false,
                 Style = mText.Style,
-                Position = mText.Position,
+                InsertPoint = mText.InsertPoint,
                 Normal = mText.Normal,
-                Alignment = TextAlignment.BaselineLeft
+                VerticalAlignment = TextVerticalAlignmentType.Baseline,
+                HorizontalAlignment = TextHorizontalAlignment.Left
             };
             return CreateText(txt);
         }
-        private IGeoObject CreateLeader(netDxf.Entities.Leader leader)
+        private IGeoObject CreateLeader(ACadSharp.Entities.Leader leader)
         {
-            Plane ocs = Plane(new Vector3(leader.Elevation * leader.Normal.X, leader.Elevation * leader.Normal.Y, leader.Elevation * leader.Normal.Z), leader.Normal);
+            GeoPoint[] leaderVertices = leader.Vertices.ToArray().Select(vert => new GeoPoint(vert.X, vert.Y, vert.Z)).ToArray();
+            Plane ocs = CADability.Plane.FromPoints(leaderVertices, out _, out _);
             GeoObject.Block blk = GeoObject.Block.Construct();
             blk.Name = "Leader:" + leader.Handle;
-            if (leader.Annotation != null)
+            if (leader.CreationType != LeaderCreationType.CreatedWithoutAnnotation)
             {
-                IGeoObject annotation = GeoObjectFromEntity(leader.Annotation);
+                IGeoObject annotation = GeoObjectFromEntity(leader.AssociatedAnnotation);
                 if (annotation != null) blk.Add(annotation);
             }
-            GeoPoint[] vtx = new GeoPoint[leader.Vertexes.Count];
+            GeoPoint[] vtx = new GeoPoint[leaderVertices.Length];
             for (int i = 0; i < vtx.Length; i++)
             {
-                vtx[i] = ocs.ToGlobal(new GeoPoint2D(leader.Vertexes[i].X, leader.Vertexes[i].Y));
+                vtx[i] = ocs.ToGlobal(new GeoPoint2D(leaderVertices[i].x, leaderVertices[i].y));
             }
             GeoObject.Polyline pln = GeoObject.Polyline.Construct();
             pln.SetPoints(vtx, false);
