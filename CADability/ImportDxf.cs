@@ -19,6 +19,7 @@ using System.Linq;
 using System.Numerics;
 using ACadSharp.Entities;
 using ACadSharp.Objects;
+using ACadSharp.Tables;
 using CSMath;
 using Color = ACadSharp.Color;
 using Polyline2D = ACadSharp.Entities.Polyline2D;
@@ -224,13 +225,17 @@ namespace CADability.DXF
             project.HatchStyleList.Add(nhss);
             return nhss;
         }
-        private HatchStyleLines FindOrCreateHatchStyleLines(netDxf.Entities.EntityObject entity, double lineAngle, double lineDistance, double[] dashes)
+        private HatchStyleLines FindOrCreateHatchStyleLines(ACadSharp.Entities.Entity entity, double lineAngle, double lineDistance, double[] dashes)
         {
+            var entColor = System.Drawing.Color.FromArgb(0, entity.Color.R, entity.Color.G, entity.Color.B);
             for (int i = 0; i < project.HatchStyleList.Count; i++)
             {
                 if (project.HatchStyleList[i] is HatchStyleLines hsl)
                 {
-                    if (hsl.ColorDef.Color.ToArgb() == entity.Layer.Color.ToColor().ToArgb() && hsl.LineAngle == lineAngle && hsl.LineDistance == lineDistance) return hsl;
+                    // TODO: Create PR to produce portable RGB values from ColorDef
+                    // Ignore alpha channel. Not supported by ACadSharp
+                    entColor = System.Drawing.Color.FromArgb(hsl.ColorDef.Color.A, entColor.R, entColor.G, entColor.B);
+                    if (hsl.ColorDef.Color.ToArgb() == entColor.ToArgb() && (Math.Abs(hsl.LineAngle) - Math.Abs(lineAngle) < Precision.eps) && Math.Abs(hsl.LineDistance) - Math.Abs(lineDistance) < Precision.eps) return hsl;
                 }
             }
             HatchStyleLines nhsl = new HatchStyleLines();
@@ -238,10 +243,21 @@ namespace CADability.DXF
             nhsl.Name = name;
             nhsl.LineAngle = lineAngle;
             nhsl.LineDistance = lineDistance;
-            nhsl.ColorDef = project.ColorList.CreateOrFind(entity.Layer.Color.ToColor().ToString(), entity.Layer.Color.ToColor());
-            Lineweight lw = entity.Lineweight;
-            if (lw == Lineweight.ByLayer) lw = entity.Layer.Lineweight;
-            if (lw == Lineweight.ByBlock && entity.Owner != null) lw = entity.Owner.Layer.Lineweight; // not sure, but Block doesn't seem to have a lineweight
+            nhsl.ColorDef = project.ColorList.CreateOrFind(entity.Color.ToString(), entColor);
+            LineweightType lw = entity.LineWeight;
+            if (lw == LineweightType.ByLayer) lw = entity.Layer.LineWeight;
+            // TODO: Test this with a block to make sure AcadSharp blocks are behaving correctly
+            if (lw == LineweightType.ByBlock && entity.Owner is BlockRecord blockRecord)
+            {
+                foreach (Entity drawingEntity in blockRecord.Document.Entities)
+                {
+                    if (drawingEntity is Insert insert && insert.Block == blockRecord)
+                    {
+                        lw = insert.Layer.LineWeight;
+                        break;
+                    }
+                }
+            }
             if (lw < 0) lw = 0;
             nhsl.LineWidth = project.LineWidthList.CreateOrFind("DXF_" + lw.ToString(), ((int)lw) / 100.0);
             nhsl.LinePattern = FindOrcreateLinePattern(dashes);
@@ -711,22 +727,22 @@ namespace CADability.DXF
             }
             else return null;
         }
-        private IGeoObject CreateHatch(netDxf.Entities.Hatch hatch)
+        private IGeoObject CreateHatch(ACadSharp.Entities.Hatch hatch)
         {
             CompoundShape cs = null;
             bool ok = true;
             List<ICurve2D> allCurves = new List<ICurve2D>();
             Plane pln = CADability.Plane.XYPlane;
-            for (int i = 0; i < hatch.BoundaryPaths.Count; i++)
+            for (int i = 0; i < hatch.Paths.Count; i++)
             {
 
                 // System.Diagnostics.Trace.WriteLine("Loop: " + i.ToString());
                 //OdDbHatch.HatchLoopType.kExternal
                 // hatch.BoundaryPaths[i].PathType
                 List<ICurve> boundaryEntities = new List<ICurve>();
-                for (int j = 0; j < hatch.BoundaryPaths[i].Edges.Count; j++)
+                for (int j = 0; j < hatch.Paths[i].Edges.Count; j++)
                 {
-                    IGeoObject ent = GeoObjectFromEntity(hatch.BoundaryPaths[i].Edges[j].ConvertTo());
+                    IGeoObject ent = GeoObjectFromEntity(hatch.Paths[i].Entities[j]);
                     if (ent is ICurve crv) boundaryEntities.Add(crv);
                 }
                 //for (int j = 0; j < hatch.BoundaryPaths[i].Entities.Count; j++)
@@ -746,7 +762,6 @@ namespace CADability.DXF
                 try
                 {
                     Border border = Border.FromUnorientedList(bdr, true);
-                    HatchBoundaryPathTypeFlags flag = hatch.BoundaryPaths[i].PathType;
                     allCurves.AddRange(bdr);
                     if (border != null)
                     {
@@ -778,24 +793,24 @@ namespace CADability.DXF
                 GeoObject.Hatch res = GeoObject.Hatch.Construct();
                 res.CompoundShape = cs;
                 res.Plane = pln;
-                if (hatch.Pattern.Fill == HatchFillType.SolidFill)
+                if (hatch.PatternType == HatchPatternType.SolidFill)
                 {
-                    HatchStyleSolid hst = FindOrCreateSolidHatchStyle(hatch.Layer.Color.ToColor());
+                    HatchStyleSolid hst = FindOrCreateSolidHatchStyle(hatch.Color);
                     res.HatchStyle = hst;
                     return res;
                 }
                 else
                 {
                     GeoObjectList list = new GeoObjectList();
-                    for (int i = 0; i < hatch.Pattern.LineDefinitions.Count; i++)
+                    for (int i = 0; i < hatch.Pattern.Lines.Count; i++)
                     {
                         if (i > 0) res = res.Clone() as GeoObject.Hatch;
-                        double lineAngle = Angle.Deg(hatch.Pattern.LineDefinitions[i].Angle);
-                        double baseX = hatch.Pattern.LineDefinitions[i].Origin.X;
-                        double baseY = hatch.Pattern.LineDefinitions[i].Origin.Y;
-                        double offsetX = hatch.Pattern.LineDefinitions[i].Delta.X;
-                        double offsetY = hatch.Pattern.LineDefinitions[i].Delta.Y;
-                        double[] dashes = hatch.Pattern.LineDefinitions[i].DashPattern.ToArray();
+                        double lineAngle = Angle.Deg(hatch.Pattern.Lines[i].Angle);
+                        double baseX = hatch.Pattern.Lines[i].BasePoint.X;
+                        double baseY = hatch.Pattern.Lines[i].BasePoint.Y;
+                        double offsetX = hatch.Pattern.Lines[i].BasePoint.X;
+                        double offsetY = hatch.Pattern.Lines[i].BasePoint.Y;
+                        double[] dashes = hatch.Pattern.Lines[i].DashLengths.ToArray();
                         HatchStyleLines hsl = FindOrCreateHatchStyleLines(hatch, lineAngle, Math.Sqrt(offsetX * offsetX + offsetY * offsetY), dashes);
                         res.HatchStyle = hsl;
                         list.Add(res);
@@ -873,10 +888,10 @@ namespace CADability.DXF
             {
                 IGeoObject res = block.Clone();
                 ModOp tranform = ModOp.Translate(new GeoVector(insert.InsertPoint.X, insert.InsertPoint.Y, insert.InsertPoint.Z)) *
-                    //ModOp.Translate(block.RefPoint.ToVector()) *
-                    ModOp.Rotate(CADability.GeoVector.ZAxis, SweepAngle.Deg(insert.Rotation)) *
-                    ModOp.Scale(insert.XScale, insert.YScale, insert.ZScale) *
-                    ModOp.Translate(CADability.GeoPoint.Origin - block.RefPoint);
+                                 //ModOp.Translate(block.RefPoint.ToVector()) *
+                                 ModOp.Rotate(CADability.GeoVector.ZAxis, SweepAngle.Deg(insert.Rotation)) *
+                                 ModOp.Scale(insert.XScale, insert.YScale, insert.ZScale) *
+                                 ModOp.Translate(CADability.GeoPoint.Origin - block.RefPoint);
                 res.Modify(tranform);
                 return res;
             }
