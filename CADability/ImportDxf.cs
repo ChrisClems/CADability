@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using ACadSharp;
 using netDxf;
 using netDxf.Entities;
@@ -1169,19 +1170,19 @@ namespace CADability.DXF
             }
             return null;
         }
-        private IGeoObject CreatePoint(netDxf.Entities.Point point)
+        private IGeoObject CreatePoint(ACadSharp.Entities.Point point)
         {
             CADability.GeoObject.Point p = CADability.GeoObject.Point.Construct();
-            p.Location = GeoPoint(point.Position);
+            p.Location = new GeoPoint(point.Location.X, point.Location.Y, point.Location.Z);
             p.Symbol = PointSymbol.Cross;
             return p;
         }
-        private IGeoObject CreateMesh(netDxf.Entities.Mesh mesh)
+        private IGeoObject CreateMesh(ACadSharp.Entities.Mesh mesh)
         {
-            GeoPoint[] vertices = new GeoPoint[mesh.Vertexes.Count];
+            GeoPoint[] vertices = new GeoPoint[mesh.Vertices.Count];
             for (int i = 0; i < vertices.Length; i++)
             {
-                vertices[i] = GeoPoint(mesh.Vertexes[i]);
+                vertices[i] = new GeoPoint(mesh.Vertices[i].X, mesh.Vertices[i].Y, mesh.Vertices[i].Z);
             }
             List<Face> faces = new List<Face>();
             for (int i = 0; i < mesh.Faces.Count; i++)
