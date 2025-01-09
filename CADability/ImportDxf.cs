@@ -21,6 +21,7 @@ using ACadSharp.Entities;
 using CSMath;
 using Color = ACadSharp.Color;
 using Polyline2D = ACadSharp.Entities.Polyline2D;
+using Solid = ACadSharp.Entities.Solid;
 
 namespace CADability.DXF
 {
@@ -811,17 +812,23 @@ namespace CADability.DXF
                 return null;
             }
         }
-        private IGeoObject CreateSolid(netDxf.Entities.Solid solid)
+        private IGeoObject CreateSolid(ACadSharp.Entities.Solid solid)
         {
-            Plane ocs = Plane(new Vector3(solid.Elevation * solid.Normal.X, solid.Elevation * solid.Normal.Y, solid.Elevation * solid.Normal.Z), solid.Normal);
+            // TODO: Look into a return type other than hatch based on DXF spec
+            GeoPoint firstPoint = new GeoPoint(solid.FirstCorner.X, solid.FirstCorner.Y, solid.FirstCorner.Z);
+            GeoPoint secondPoint = new GeoPoint(solid.SecondCorner.X, solid.SecondCorner.Y, solid.SecondCorner.Z);
+            GeoPoint thirdPoint = new GeoPoint(solid.ThirdCorner.X, solid.ThirdCorner.Y, solid.ThirdCorner.Z);
+            GeoPoint fourthPoint = new GeoPoint(solid.FourthCorner.X, solid.FourthCorner.Y, solid.FourthCorner.Z);
+            Plane ocs = CADability.Plane.FromPoints(new GeoPoint[] { firstPoint, secondPoint, thirdPoint, fourthPoint }, out _, out _);
+            
             // not sure, whether the ocs is correct, maybe the position is (0,0,solid.Elevation)
 
-            HatchStyleSolid hst = FindOrCreateSolidHatchStyle(solid.Color.ToColor());
+            HatchStyleSolid hst = FindOrCreateSolidHatchStyle(solid.Color);
             List<GeoPoint> points = new List<GeoPoint>();
-            points.Add(ocs.ToGlobal(new GeoPoint2D(solid.FirstVertex.X, solid.FirstVertex.Y)));
-            points.Add(ocs.ToGlobal(new GeoPoint2D(solid.SecondVertex.X, solid.SecondVertex.Y)));
-            points.Add(ocs.ToGlobal(new GeoPoint2D(solid.ThirdVertex.X, solid.ThirdVertex.Y)));
-            points.Add(ocs.ToGlobal(new GeoPoint2D(solid.FourthVertex.X, solid.FourthVertex.Y)));
+            points.Add(ocs.ToGlobal(firstPoint.To2D()));
+            points.Add(ocs.ToGlobal(secondPoint.To2D()));
+            points.Add(ocs.ToGlobal(thirdPoint.To2D()));
+            points.Add(ocs.ToGlobal(fourthPoint.To2D()));
             for (int i = 3; i > 0; --i)
             {   // gleiche Punkte wegmachen
                 for (int j = 0; j < i; ++j)
