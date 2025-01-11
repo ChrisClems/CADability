@@ -371,7 +371,7 @@ namespace CADability.DXF
 
                 go.UserData.Add(name, xdata);
             }
-            go.UserData["DxfImport.Handle"] = new UserInterface.StringProperty(entity.Handle, "DxfImport.Handle");
+            go.UserData["DxfImport.Handle"] = new UserInterface.StringProperty(entity.Handle.ToString(), "DxfImport.Handle");
         }
         private GeoObject.Block FindBlock(ACadSharp.Blocks.Block entity)
         {
