@@ -354,17 +354,17 @@ namespace CADability.DXF
 
         private ACadSharp.Entities.Insert ExportBlock(GeoObject.Block blk)
         {
-            List<Entity> entities = new List<Entity>();
-            for (int i = 0; i < blk.Children.Count; i++)
-            {
-                Entity[] entity = GeoObjectToEntity(blk.Child(i));
-                if (entity != null) entities.AddRange(entity);
-            }
             string name = blk.Name;
-            if (name == null || doc.Blocks.Contains(name) || !TableObject.IsValidName(name)) name = GetNextAnonymousBlockName();
-            netDxf.Blocks.Block block = new netDxf.Blocks.Block(name, entities);
-            doc.Blocks.Add(block);
-            return new netDxf.Entities.Insert(block);
+            // What's TableObject. Do I need to validate names?
+            char[] invalidCharacters = { '\\', '/', ':', '*', '?', '"', '<', '>', '|', ';', ',', '=', '`' };
+            if (name == null || doc.BlockRecords.Contains(name) || name.IndexOfAny(invalidCharacters) > -1) name = GetNextAnonymousBlockName();
+            var acBlock = new ACadSharp.Tables.BlockRecord(name);
+            foreach (var entity in blk.Children)
+            {
+                acBlock.Entities.AddRange(GeoObjectToEntity(entity));
+            }
+            doc.BlockRecords.Add(acBlock);
+            return new ACadSharp.Entities.Insert(acBlock);
         }
         private ACadSharp.Entities.Insert ExportPath(Path path)
         {
