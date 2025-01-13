@@ -345,12 +345,25 @@ namespace CADability.DXF
         {
             if (go is IColorDef cd) cd.ColorDef = FindOrCreateColor(entity.Color, entity.Layer);
             go.Layer = layerTable[entity.Layer];
-            if (go is ILinePattern lp) lp.LinePattern = project.LinePatternList.Find(entity.Linetype.Name);
+            if (go is ILinePattern lp) lp.LinePattern = project.LinePatternList.Find(entity.LineType.Name);
             if (go is ILineWidth ld)
             {
-                Lineweight lw = entity.Lineweight;
-                if (lw == Lineweight.ByLayer) lw = entity.Layer.Lineweight;
-                if (lw == Lineweight.ByBlock && entity.Owner != null) lw = entity.Owner.Layer.Lineweight; // not sure, but Block doesn't seem to have a lineweight
+                LineweightType lw = entity.LineWeight;
+                if (lw == LineweightType.ByLayer) lw = entity.Layer.LineWeight;
+                // Blockrecords are instantiated in the drawing with inserts, which hold the style data
+                // Insert must be found to retrieve ByBlock style data
+                // There may be a more efficient way to do this than walking all entities
+                if (lw == LineweightType.ByBlock && entity.Owner is BlockRecord blockRecord)
+                {
+                    foreach (Entity drawingEntity in blockRecord.Document.Entities)
+                    {
+                        if (drawingEntity is Insert insert && insert.Block == blockRecord)
+                        {
+                            lw = insert.Layer.LineWeight;
+                            break;
+                        }
+                    }
+                }
                 if (lw < 0) lw = 0;
                 ld.LineWidth = project.LineWidthList.CreateOrFind("DXF_" + lw.ToString(), ((int)lw) / 100.0);
             }
@@ -364,7 +377,7 @@ namespace CADability.DXF
 
                 string name = item.Value.AppId.Name + ":" + item.Key;
 
-                foreach (var record in item.Value.Records)
+                foreach (ExtendedDataRecord record in item.Value.Records)
                 {
                     xdata.Data.Add(new KeyValuePair<DxfCode, object>(record.Code, record.Value));
                 }
@@ -380,11 +393,14 @@ namespace CADability.DXF
                 found = GeoObject.Block.Construct();
                 found.Name = entity.Name;
                 found.RefPoint = new GeoPoint(entity.BasePoint.X, entity.BasePoint.Y, entity.BasePoint.Z);
-                List<Entity> entities = entity.Reactors.Values.ToList();
-                for (int i = 0; i < entities.Count; i++)
+                List<CadObject> entities = entity.Reactors.Values.ToList();
+                foreach (CadObject obj in entities)
                 {
-                    IGeoObject go = GeoObjectFromEntity(entities[i]);
-                    if (go != null) found.Add(go);
+                    if (obj is ACadSharp.Entities.Entity e)
+                    {
+                        IGeoObject go = GeoObjectFromEntity(e);
+                        if (go != null) found.Add(go);
+                    }
                 }
                 blockTable[entity.Handle.ToString()] = found;
             }
@@ -924,10 +940,13 @@ namespace CADability.DXF
         {
             List<CadObject> exploded = mLine.Reactors.Values.ToList();
             List<IGeoObject> path = new List<IGeoObject>();
-            for (int i = 0; i < exploded.Count; i++)
+            foreach (CadObject obj in exploded)
             {
-                IGeoObject ent = GeoObjectFromEntity(exploded[i]);
-                if (ent != null) path.Add(ent);
+                if (obj is Entity ent)
+                {
+                    IGeoObject go = GeoObjectFromEntity(ent);
+                    if (go != null) path.Add(go);
+                }
             }
             GeoObjectList list = new GeoObjectList(path);
             GeoObjectList res = new GeoObjectList();
@@ -1144,6 +1163,7 @@ namespace CADability.DXF
             blk.Add(pln);
             return blk;
         }
+        // Trying to consolidate polyline creation to IPolyline
         // private IGeoObject CreatePolyline2D(ACadSharp.Entities.Polyline2D polyline2D)
         // {
         //     List<CadObject> exploded = polyline2D.Explode();
@@ -1273,5 +1293,238 @@ namespace CADability.DXF
             }
             else return null;
         }
+        private static LwPolyline SplineToPolyline2D(Spline spline, int precision)
+        {
+            //List<Vector3> vetexes3D = spline.
+        }
+
+        private List<Vector3> SplinePolygonalVertexes(Spline spline, int precision)
+        {
+            bool isClosed = (spline.Flags & SplineFlags.Closed) != 0;
+            bool isClosedPeriodic = (spline.Flags & SplineFlags.Periodic) != 0;
+            return NurbsEvaluator(spline.ControlPoints, spline.Weights, spline.Knots, spline.Degree, isClosed, isClosedPeriodic, precision );
+        }
+        
+        /// <summary>
+        /// Calculate points along a NURBS curve.
+        /// </summary>
+        /// <param name="controls">List of spline control points.</param>
+        /// <param name="weights">Spline control weights. If null the weights vector will be automatically initialized with 1.0.</param>
+        /// <param name="knots">List of spline knot points. If null the knot vector will be automatically generated.</param>
+        /// <param name="degree">Spline degree.</param>
+        /// <param name="isClosed">Specifies if the spline is closed.</param>
+        /// <param name="isClosedPeriodic">Specifies if the spline is closed and periodic.</param>
+        /// <param name="precision">Number of vertexes generated.</param>
+        /// <returns>A list vertexes that represents the spline.</returns>
+        /// <remarks>
+        /// NURBS evaluator provided by mikau16 based on Michael V. implementation, roughly follows the notation of http://cs.mtu.edu/~shene/PUBLICATIONS/2004/NURBS.pdf
+        /// Added a few modifications to make it work for open, closed, and periodic closed splines.
+        /// </remarks>
+        private static List<Vector3> NurbsEvaluator(Vector3[] controls, double[] weights, double[] knots, int degree, bool isClosed, bool isClosedPeriodic, int precision)
+        {
+            if (precision < 2)
+            {
+                throw new ArgumentOutOfRangeException(nameof(precision), precision, "The precision must be equal or greater than two.");
+            }
+
+            // control points
+            if (controls == null)
+            {
+                throw new ArgumentNullException(nameof(controls), "A spline entity with control points is required.");
+            }
+
+            int numCtrlPoints = controls.Length;
+
+            if (numCtrlPoints == 0)
+            {
+                throw new ArgumentException("A spline entity with control points is required.", nameof(controls));
+            }
+
+            // weights
+            if (weights == null)
+            {
+                // give the default 1.0 to the control points weights
+                weights = new double[numCtrlPoints];
+                for (int i = 0; i < numCtrlPoints; i++)
+                {
+                    weights[i] = 1.0;
+                }
+            }
+            else if (weights.Length != numCtrlPoints)
+            {
+                throw new ArgumentException("The number of control points must be the same as the number of weights.", nameof(weights));
+            }
+
+            // knots
+            if (knots == null)
+            {
+                knots = CreateKnotVector(numCtrlPoints, degree, isClosedPeriodic);
+            }
+            else
+            {
+                int numKnots;
+                if (isClosedPeriodic)
+                {
+                    numKnots = numCtrlPoints + 2 * degree + 1;
+                }
+                else
+                {
+                    numKnots = numCtrlPoints + degree + 1;
+                }
+                if (knots.Length != numKnots)
+                {
+                    throw new ArgumentException("Invalid number of knots.");
+                }
+            }
+
+            Vector3[] ctrl;
+            double[] w;
+            if (isClosedPeriodic)
+            {
+                ctrl = new Vector3[numCtrlPoints + degree];
+                w = new double[numCtrlPoints + degree];
+                for (int i = 0; i < degree; i++)
+                {
+                    int index = numCtrlPoints - degree + i;
+                    ctrl[i] = controls[index];
+                    w[i] = weights[index];
+                }
+
+                controls.CopyTo(ctrl, degree);
+                weights.CopyTo(w, degree);
+            }
+            else
+            {
+                ctrl = controls;
+                w = weights;
+            }
+
+            double uStart;
+            double uEnd;
+            List<Vector3> vertexes = new List<Vector3>();
+
+            if (isClosed)
+            {
+                uStart = knots[0];
+                uEnd = knots[knots.Length - 1];
+            }
+            else if (isClosedPeriodic)
+            {
+                uStart = knots[degree];
+                uEnd = knots[knots.Length - degree - 1];
+            }
+            else
+            {
+                precision -= 1;
+                uStart = knots[0];
+                uEnd = knots[knots.Length - 1];
+            }
+
+            double uDelta = (uEnd - uStart) / precision;
+
+            for (int i = 0; i < precision; i++)
+            {
+                double u = uStart + uDelta * i;
+                vertexes.Add(C(ctrl, w, knots, degree, u));
+            }
+
+            if (!(isClosed || isClosedPeriodic))
+            {
+                vertexes.Add(ctrl[ctrl.Length - 1]);
+            }
+
+            return vertexes;
+        }
+        
+        private static double[] CreateKnotVector(int numControlPoints, int degree, bool isPeriodic)
+        {
+            // create knot vector
+            int numKnots;
+            double[] knots;
+
+            if (!isPeriodic)
+            {
+                numKnots = numControlPoints + degree + 1;
+                knots = new double[numKnots];
+
+                int i;
+                for (i = 0; i <= degree; i++)
+                {
+                    knots[i] = 0.0;
+                }
+
+                for (; i < numControlPoints; i++)
+                {
+                    knots[i] = i - degree;
+                }
+
+                for (; i < numKnots; i++)
+                {
+                    knots[i] = numControlPoints - degree;
+                }
+            }
+            else
+            {
+                numKnots = numControlPoints + 2 * degree + 1;
+                knots = new double[numKnots];
+
+                double factor = 1.0 / (numControlPoints - degree);
+                for (int i = 0; i < numKnots; i++)
+                {
+                    knots[i] = (i - degree) * factor;
+                }
+            }
+
+            return knots;
+        }
+        private static Vector3 C(Vector3[] ctrlPoints, double[] weights, double[] knots, int degree, double u)
+        {
+            Vector3 vectorSum = Vector3.Zero;
+            double denominatorSum = 0.0;
+
+            // optimization suggested by ThVoss
+            for (int i = 0; i < ctrlPoints.Length; i++)
+            {
+                double n = N(knots, i, degree, u);
+                denominatorSum += n * weights[i];
+                vectorSum += weights[i] * n * ctrlPoints[i];
+            }
+
+            // avoid possible divided by zero error, this should never happen
+            if (Math.Abs(denominatorSum) < double.Epsilon)
+            {
+                return Vector3.Zero;
+            }
+
+            return (1.0 / denominatorSum) * vectorSum;
+        }
+        
+        private static double N(double[] knots, int i, int p, double u)
+        {
+            if (p <= 0)
+            {
+                if (knots[i] <= u && u < knots[i + 1])
+                {
+                    return 1;
+                }
+
+                return 0.0;
+            }
+
+            double leftCoefficient = 0.0;
+            if (!(Math.Abs(knots[i + p] - knots[i]) < double.Epsilon))
+            {
+                leftCoefficient = (u - knots[i]) / (knots[i + p] - knots[i]);
+            }
+
+            double rightCoefficient = 0.0; // article contains error here, denominator is Knots[i + p + 1] - Knots[i + 1]
+            if (!(Math.Abs(knots[i + p + 1] - knots[i + 1]) < double.Epsilon))
+            {
+                rightCoefficient = (knots[i + p + 1] - u) / (knots[i + p + 1] - knots[i + 1]);
+            }
+
+            return leftCoefficient * N(knots, i, p - 1, u) + rightCoefficient * N(knots, i + 1, p - 1, u);
+        }
+        
     }
 }
