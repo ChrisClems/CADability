@@ -1,49 +1,51 @@
 ﻿using CADability.Attribute;
 using CADability.GeoObject;
 using MathNet.Numerics.Statistics.Mcmc;
-using netDxf;
-using netDxf.Blocks;
-using netDxf.Entities;
-using netDxf.Tables;
 using System;
 using System.Collections.Generic;
-using System.Drawing;
 using System.Net.WebSockets;
 using System.Text;
+using ACadSharp;
+using ACadSharp.Entities;
+using ACadSharp.IO;
+using ACadSharp.Tables;
+using CSMath;
+using Color = System.Drawing.Color;
+using Layer = ACadSharp.Tables.Layer;
 
 namespace CADability.DXF
 {
     public class Export
     {
-        private DxfDocument doc;
-        private Dictionary<CADability.Attribute.Layer, netDxf.Tables.Layer> createdLayers;
-        Dictionary<CADability.Attribute.LinePattern, netDxf.Tables.Linetype> createdLinePatterns;
+        private CadDocument doc;
+        private Dictionary<CADability.Attribute.Layer, ACadSharp.Tables.Layer> createdLayers;
+        Dictionary<CADability.Attribute.LinePattern, ACadSharp.Tables.LineType> createdLinePatterns;
         int anonymousBlockCounter = 0;
         double triangulationPrecision = 0.1;
-        public Export(netDxf.Header.DxfVersion version)
+        public Export(ACadSharp.ACadVersion version)
         {
-            doc = new DxfDocument(version);
-            createdLayers = new Dictionary<Attribute.Layer, netDxf.Tables.Layer>();
-            createdLinePatterns = new Dictionary<LinePattern, Linetype>();
+            doc = new CadDocument(version);
+            createdLayers = new Dictionary<Attribute.Layer, ACadSharp.Tables.Layer>();
+            createdLinePatterns = new Dictionary<LinePattern, LineType>();
         }
-        public byte[] WriteToByteArray(Project toExport)
-        {
-            var memoryStream = new System.IO.MemoryStream();
-            Model modelSpace = null;
-            if (toExport.GetModelCount() == 1) modelSpace = toExport.GetModel(0);
-            else
-            {
-                modelSpace = toExport.FindModel("*Model_Space");
-            }
-            if (modelSpace == null) modelSpace = toExport.GetActiveModel();
-            for (int i = 0; i < modelSpace.Count; i++)
-            {
-                EntityObject[] entity = GeoObjectToEntity(modelSpace[i]);
-                if (entity != null) doc.Entities.Add(entity);
-            }
-            doc.Save(memoryStream);
-            return memoryStream.ToArray();
-        }
+        // public byte[] WriteToByteArray(Project toExport)
+        // {
+        //     var memoryStream = new System.IO.MemoryStream();
+        //     Model modelSpace = null;
+        //     if (toExport.GetModelCount() == 1) modelSpace = toExport.GetModel(0);
+        //     else
+        //     {
+        //         modelSpace = toExport.FindModel("*Model_Space");
+        //     }
+        //     if (modelSpace == null) modelSpace = toExport.GetActiveModel();
+        //     for (int i = 0; i < modelSpace.Count; i++)
+        //     {
+        //         EntityObject[] entity = GeoObjectToEntity(modelSpace[i]);
+        //         if (entity != null) doc.Entities.Add(entity);
+        //     }
+        //     doc.Save(memoryStream);
+        //     return memoryStream.ToArray();
+        // }
 
         public void WriteToFile(Project toExport, string filename)
         {
@@ -64,16 +66,16 @@ namespace CADability.DXF
             if (faces.Count > 0) geoObjects.Add(Shell.FromFaces(faces.ToArray())); // this shell is only to combine same color faces to a single mesh
             for (int i = 0; i < geoObjects.Count; i++)
             {
-                EntityObject[] entity = GeoObjectToEntity(geoObjects[i]);
-                if (entity != null) doc.Entities.Add(entity);
+                Entity[] entity = GeoObjectToEntity(geoObjects[i]);
+                if (entity != null) doc.Entities.Add((Entity)entity);
             }
             doc.Save(filename);
         }
 
-        private EntityObject[] GeoObjectToEntity(IGeoObject geoObject)
+        private Entity[] GeoObjectToEntity(IGeoObject geoObject)
         {
-            EntityObject entity = null;
-            EntityObject[] entities = null;
+            Entity entity = null;
+            Entity[] entities = null;
             switch (geoObject)
             {
                 case GeoObject.Point point: entity = ExportPoint(point); break;
@@ -115,7 +117,7 @@ namespace CADability.DXF
                     if (!createdLayers.TryGetValue(geoObject.Layer, out netDxf.Tables.Layer layer))
                     {
                         layer = new netDxf.Tables.Layer(geoObject.Layer.Name);
-                        doc.Layers.Add(layer);
+                        doc.Layers.Add((Layer)layer);
                         createdLayers[geoObject.Layer] = layer;
                     }
                     entities[i].Layer = layer;
@@ -231,7 +233,7 @@ namespace CADability.DXF
                 {
                     PolyfaceMesh pfm = new PolyfaceMesh(item.Value.vertices, item.Value.indices);
                     SetColor(pfm, item.Key);
-                    res.Add(pfm);
+                    res.Add((EntityObject)pfm);
                 }
                 return res.ToArray();
             }
@@ -409,17 +411,17 @@ namespace CADability.DXF
             return new netDxf.Entities.Polyline3D(vertices);
         }
 
-        private netDxf.Entities.Point ExportPoint(GeoObject.Point point)
+        private ACadSharp.Entities.Point ExportPoint(GeoObject.Point point)
         {
-            return new netDxf.Entities.Point(Vector3(point.Location));
+            return new ACadSharp.Entities.Point(Vector3(point.Location));
         }
-        private netDxf.Entities.Line ExportLine(GeoObject.Line line)
+        private ACadSharp.Entities.Line ExportLine(GeoObject.Line line)
         {
-            return new netDxf.Entities.Line(Vector3(line.StartPoint), Vector3(line.EndPoint));
+            return new ACadSharp.Entities.Line(Vector3(line.StartPoint), Vector3(line.EndPoint));
         }
-        private EntityObject ExportEllipse(GeoObject.Ellipse elli)
+        private Entity ExportEllipse(GeoObject.Ellipse elli)
         {
-            netDxf.Entities.EntityObject entity = null;
+            ACadSharp.Entities.Entity entity = null;
             if (elli.IsArc)
             {
                 Plane dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
@@ -434,57 +436,92 @@ namespace CADability.DXF
 
                     //Check if ellipse is actually a closed circle
                     if (Math.Abs(elli.SweepParameter) > Math.PI && Precision.IsEqual(elli.StartPoint, elli.EndPoint))
-                        entity = new netDxf.Entities.Circle(Vector3(aligned.Center), aligned.Radius);
-                    else
-                        entity = new netDxf.Entities.Arc(Vector3(aligned.Center), aligned.Radius, aligned.StartParameter / Math.PI * 180, (aligned.StartParameter + aligned.SweepParameter) / Math.PI * 180);
-
-                    entity.Normal = Vector3(dxfPlane.Normal);
-                }
-                else
-                {
-                    netDxf.Entities.Ellipse expelli = new netDxf.Entities.Ellipse(Vector3(elli.Center), 2 * elli.MajorRadius, 2 * elli.MinorRadius);
-                    entity = expelli;
-                    entity.Normal = Vector3(elli.Plane.Normal);
-                    Plane cdbplane = elli.Plane;
-                    GeoVector2D dir = dxfPlane.Project(cdbplane.DirectionX);
-                    SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
-                    if (elli.SweepParameter < 0)
-                    {   // there are no clockwise oriented ellipse arcs in dxf
-                        expelli.Rotation = -rot.Degree;
-
-                        double startParameter = elli.StartParameter + elli.SweepParameter + Math.PI;
-                        expelli.StartAngle = CalcStartEndAngle(startParameter, expelli.MajorAxis, expelli.MinorAxis);
-
-                        double endParameter = elli.StartParameter + Math.PI;
-                        expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
+                    {
+                        entity = new Circle
+                        {
+                            Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
+                            Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
+                            Radius = elli.Radius
+                        };
                     }
                     else
                     {
-                        expelli.Rotation = rot.Degree;
-                        expelli.StartAngle = CalcStartEndAngle(elli.StartParameter, expelli.MajorAxis, expelli.MinorAxis);
-
-                        double endParameter = elli.StartParameter + elli.SweepParameter;
-                        expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
+                        entity = new Arc
+                        {
+                            Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
+                            Center = new XYZ(aligned.Center.x, aligned.Center.y, aligned.Center.z),
+                            Radius = aligned.Radius,
+                            StartAngle = aligned.StartParameter / Math.PI * 180,
+                            EndAngle = (aligned.StartParameter + aligned.SweepParameter) / Math.PI * 180,
+                        };
                     }
+                }
+                else
+                {
+                    ACadSharp.Entities.Ellipse expelli = new ACadSharp.Entities.Ellipse()
+                    {
+                        Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
+                        Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
+                        RadiusRatio = elli.MajorRadius / elli.MinorRadius,
+                        StartParameter = elli.StartParameter,
+                        EndParameter = elli.SweepParameter,
+                        EndPoint = new XYZ(elli.EndPoint.x, elli.EndPoint.y, elli.EndPoint.z),
+                    };
+                    entity = expelli;
+                    // TODO: Is any of this necessary? Acadsharp Ellipse constructor is fully set
+                    // Plane cdbplane = elli.Plane;
+                    // GeoVector2D dir = dxfPlane.Project(cdbplane.DirectionX);
+                    // SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
+                    // if (elli.SweepParameter < 0)
+                    // {   // there are no clockwise oriented ellipse arcs in dxf
+                    //     expelli.Rotation = -rot.Degree;
+                    //
+                    //     double startParameter = elli.StartParameter + elli.SweepParameter + Math.PI;
+                    //     expelli.StartAngle = CalcStartEndAngle(startParameter, expelli.MajorAxis, expelli.MinorAxis);
+                    //
+                    //     double endParameter = elli.StartParameter + Math.PI;
+                    //     expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
+                    // }
+                    // else
+                    // {
+                    //     expelli.Rotation = rot.Degree;
+                    //     expelli.StartAngle = CalcStartEndAngle(elli.StartParameter, expelli.MajorAxis, expelli.MinorAxis);
+                    //
+                    //     double endParameter = elli.StartParameter + elli.SweepParameter;
+                    //     expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
+                    // }
                 }
             }
             else
             {
                 if (elli.IsCircle)
                 {
-                    entity = new netDxf.Entities.Circle(Vector3(elli.Center), elli.Radius);
-                    entity.Normal = Vector3(elli.Plane.Normal);
+                    entity = new ACadSharp.Entities.Circle()
+                    {
+                        Normal = new XYZ(elli.Normal.x, elli.Normal.y, elli.Normal.z),
+                        Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
+                        Radius = elli.Radius
+                    };
                 }
                 else
                 {
-                    netDxf.Entities.Ellipse expelli = new netDxf.Entities.Ellipse(Vector3(elli.Center), 2 * elli.MajorRadius, 2 * elli.MinorRadius);
+                    ACadSharp.Entities.Ellipse expelli = new ACadSharp.Entities.Ellipse()
+                    {
+                        Normal = new XYZ(elli.Plane.Normal.x, elli.Plane.Normal.y, elli.Plane.Normal.z),
+                        Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
+                        RadiusRatio = elli.MajorRadius / elli.MinorRadius,
+                        StartParameter = elli.StartParameter,
+                        EndParameter = elli.SweepParameter,
+                        EndPoint = new XYZ(elli.EndPoint.x, elli.EndPoint.y, elli.EndPoint.z),
+                    };
+                    
                     entity = expelli;
-                    entity.Normal = Vector3(elli.Plane.Normal);
-                    Plane dxfplane = Import.Plane(expelli.Center, expelli.Normal); // this plane is not correct, it has to be rotated
-                    Plane cdbplane = elli.Plane;
-                    GeoVector2D dir = dxfplane.Project(cdbplane.DirectionX);
-                    SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
-                    expelli.Rotation = rot.Degree;
+                    // TODO: Is any of this necessary?
+                    // Plane dxfplane = Import.Plane(expelli.Center, expelli.Normal); // this plane is not correct, it has to be rotated
+                    // Plane cdbplane = elli.Plane;
+                    // GeoVector2D dir = dxfplane.Project(cdbplane.DirectionX);
+                    // SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
+                    // expelli.Rotation = rot.Degree;
                 }
             }
             return entity;
@@ -582,7 +619,7 @@ namespace CADability.DXF
                 if (!createdLayers.TryGetValue(go.Layer, out netDxf.Tables.Layer layer))
                 {
                     layer = new netDxf.Tables.Layer(go.Layer.Name);
-                    doc.Layers.Add(layer);
+                    doc.Layers.Add((Layer)layer);
                     createdLayers[go.Layer] = layer;
                 }
                 entity.Layer = layer;
