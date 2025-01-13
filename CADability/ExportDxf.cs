@@ -352,12 +352,12 @@ namespace CADability.DXF
             return res;
         }
 
-        private netDxf.Entities.Insert ExportBlock(GeoObject.Block blk)
+        private ACadSharp.Entities.Insert ExportBlock(GeoObject.Block blk)
         {
-            List<EntityObject> entities = new List<EntityObject>();
+            List<Entity> entities = new List<Entity>();
             for (int i = 0; i < blk.Children.Count; i++)
             {
-                EntityObject[] entity = GeoObjectToEntity(blk.Child(i));
+                Entity[] entity = GeoObjectToEntity(blk.Child(i));
                 if (entity != null) entities.AddRange(entity);
             }
             string name = blk.Name;
@@ -366,47 +366,54 @@ namespace CADability.DXF
             doc.Blocks.Add(block);
             return new netDxf.Entities.Insert(block);
         }
-        private netDxf.Entities.Insert ExportPath(Path path)
+        private ACadSharp.Entities.Insert ExportPath(Path path)
         {
-            List<EntityObject> entities = new List<EntityObject>();
-            for (int i = 0; i < path.Curves.Length; i++)
+            var acBlock = new ACadSharp.Tables.BlockRecord(GetNextAnonymousBlockName());
+            foreach (var curve in path.Curves)
             {
-                EntityObject[] curve = GeoObjectToEntity(path.Curves[i] as IGeoObject);
-                if (curve != null) entities.AddRange(curve);
+                Entity[] curveEntity = GeoObjectToEntity(curve as IGeoObject);
+                if (curve != null) acBlock.Entities.AddRange(curveEntity);
             }
-            netDxf.Blocks.Block block = new netDxf.Blocks.Block(GetNextAnonymousBlockName(), entities);
-            doc.Blocks.Add(block);
-            return new netDxf.Entities.Insert(block);
+            doc.BlockRecords.Add(acBlock);
+            return new ACadSharp.Entities.Insert(acBlock);
         }
 
-        private EntityObject[] ExportPathWithoutBlock(Path path)
+        private Entity[] ExportPathWithoutBlock(Path path)
         {
-            List<EntityObject> entities = new List<EntityObject>();
+            List<Entity> entities = new List<Entity>();
             for (int i = 0; i < path.Curves.Length; i++)
             {
-                EntityObject[] curve = GeoObjectToEntity(path.Curves[i] as IGeoObject);
+                Entity[] curve = GeoObjectToEntity(path.Curves[i] as IGeoObject);
                 if (curve != null) entities.AddRange(curve);
             }
             return entities.ToArray();
         }
-
-        private netDxf.Entities.Spline ExportBSpline(BSpline bspline)
+        
+        private ACadSharp.Entities.Spline ExportBSpline(BSpline bspline)
         {
-            List<Vector3> poles = new List<Vector3>(bspline.Poles.Length);
+            Spline spline = new ACadSharp.Entities.Spline();
 
-            for (int i = 0; i < bspline.Poles.Length; i++)
-                poles.Add(Vector3(bspline.Poles[i]));
-
-            List<double> knots = new List<double>();
-            for (int i = 0; i < bspline.Knots.Length; i++)
+            foreach (GeoPoint fitPoint in bspline.ThroughPoint)
             {
-                for (int j = 0; j < bspline.Multiplicities[i]; j++) knots.Add(bspline.Knots[i]);
+                spline.FitPoints.Add(new XYZ(fitPoint.x, fitPoint.y, fitPoint.z));
             }
 
-            if (bspline.HasWeights)
-                return new netDxf.Entities.Spline(poles, bspline.Weights, knots, (short)bspline.Degree, bspline.IsClosed);
-            else
-                return new netDxf.Entities.Spline(poles, null, knots, (short)bspline.Degree, bspline.IsClosed);
+            foreach (GeoPoint controlPoint in bspline.Poles)
+            {
+                spline.ControlPoints.Add(new XYZ(controlPoint.x, controlPoint.y, controlPoint.z));
+            }
+
+            foreach (double weight in bspline.Weights)
+            {
+                spline.Weights.Add(weight);
+            }
+
+            for (int i = 0; i < bspline.Knots.Length; i++)
+            {
+                for (int j = 0; i < bspline.Multiplicities[i]; j++) spline.Knots.Add(bspline.Knots[i]);
+            }
+
+            return spline;
         }
 
         private ACadSharp.Entities.Polyline3D ExportPolyline(GeoObject.Polyline goPolyline)
