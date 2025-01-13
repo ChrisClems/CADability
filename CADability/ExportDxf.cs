@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Text;
+using netDxf;
 using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.IO;
@@ -66,10 +67,19 @@ namespace CADability.DXF
             if (faces.Count > 0) geoObjects.Add(Shell.FromFaces(faces.ToArray())); // this shell is only to combine same color faces to a single mesh
             for (int i = 0; i < geoObjects.Count; i++)
             {
-                Entity[] entity = GeoObjectToEntity(geoObjects[i]);
-                if (entity != null) doc.Entities.Add((Entity)entity);
+                Entity[] entities = GeoObjectToEntity(geoObjects[i]);
+                if (entities != null)
+                {
+                    foreach (Entity entity in entities)
+                    {
+                        doc.Entities.Add(entity);
+                    }
+                }
             }
-            doc.Save(filename);
+            using (DxfWriter writer = new DxfWriter(filename, doc, false))
+            {
+                writer.Write();
+            }
         }
 
         private Entity[] GeoObjectToEntity(IGeoObject geoObject)
@@ -399,16 +409,24 @@ namespace CADability.DXF
                 return new netDxf.Entities.Spline(poles, null, knots, (short)bspline.Degree, bspline.IsClosed);
         }
 
-        private netDxf.Entities.Polyline3D ExportPolyline(GeoObject.Polyline polyline)
+        private ACadSharp.Entities.Polyline3D ExportPolyline(GeoObject.Polyline goPolyline)
         {
             //TODO: Check if a new method for Polyline2D (old LwPolyline) is necessary
-            List<Vector3> vertices = new List<Vector3>();
-            for (int i = 0; i < polyline.Vertices.Length; i++)
+            var polyline = new ACadSharp.Entities.Polyline3D();
+            for (int i = 0; i < goPolyline.Vertices.Length; i++)
             {
-                vertices.Add(Vector3(polyline.Vertices[i]));
+                var vert = new ACadSharp.Entities.Vertex2D();
+                vert.Location = new XYZ(goPolyline.Vertices[i].x, goPolyline.Vertices[i].y, goPolyline.Vertices[i].z);
+                polyline.Vertices.Add(vert);
             }
-            if (polyline.IsClosed) vertices.Add(Vector3(polyline.Vertices[0]));
-            return new netDxf.Entities.Polyline3D(vertices);
+
+            if (goPolyline.IsClosed)
+            {
+                var endVert = new ACadSharp.Entities.Vertex2D();
+                endVert.Location = new XYZ(goPolyline.Vertices[0].x, goPolyline.Vertices[0].y, goPolyline.Vertices[0].z);
+                polyline.Vertices.Add(endVert);
+            }
+            return polyline;
         }
 
         private ACadSharp.Entities.Point ExportPoint(GeoObject.Point point)
@@ -535,36 +553,37 @@ namespace CADability.DXF
             return Vector2.Angle(startPoint) * netDxf.MathHelper.RadToDeg;
         }
 
-        private static void SetEllipseParameters(netDxf.Entities.Ellipse ellipse, double startparam, double endparam)
-        {
-            //CADability: also set the start and end parameter
-            //ellipse.StartParameter = startparam;
-            //ellipse.EndParameter = endparam;
-            if (MathHelper.IsZero(startparam) && MathHelper.IsEqual(endparam, MathHelper.TwoPI))
-            {
-                ellipse.StartAngle = 0.0;
-                ellipse.EndAngle = 0.0;
-            }
-            else
-            {
-                double a = ellipse.MajorAxis * 0.5;
-                double b = ellipse.MinorAxis * 0.5;
-
-                Vector2 startPoint = new Vector2(a * Math.Cos(startparam), b * Math.Sin(startparam));
-                Vector2 endPoint = new Vector2(a * Math.Cos(endparam), b * Math.Sin(endparam));
-
-                if (Vector2.Equals(startPoint, endPoint))
-                {
-                    ellipse.StartAngle = 0.0;
-                    ellipse.EndAngle = 0.0;
-                }
-                else
-                {
-                    ellipse.StartAngle = Vector2.Angle(startPoint) * MathHelper.RadToDeg;
-                    ellipse.EndAngle = Vector2.Angle(endPoint) * MathHelper.RadToDeg;
-                }
-            }
-        }
+        // Looks to be a method to make less repeat code in ExportEllipse but it was never implemented
+        // private static void SetEllipseParameters(netDxf.Entities.Ellipse ellipse, double startparam, double endparam)
+        // {
+        //     //CADability: also set the start and end parameter
+        //     //ellipse.StartParameter = startparam;
+        //     //ellipse.EndParameter = endparam;
+        //     if (MathHelper.IsZero(startparam) && MathHelper.IsEqual(endparam, MathHelper.TwoPI))
+        //     {
+        //         ellipse.StartAngle = 0.0;
+        //         ellipse.EndAngle = 0.0;
+        //     }
+        //     else
+        //     {
+        //         double a = ellipse.MajorAxis * 0.5;
+        //         double b = ellipse.MinorAxis * 0.5;
+        //
+        //         Vector2 startPoint = new Vector2(a * Math.Cos(startparam), b * Math.Sin(startparam));
+        //         Vector2 endPoint = new Vector2(a * Math.Cos(endparam), b * Math.Sin(endparam));
+        //
+        //         if (Vector2.Equals(startPoint, endPoint))
+        //         {
+        //             ellipse.StartAngle = 0.0;
+        //             ellipse.EndAngle = 0.0;
+        //         }
+        //         else
+        //         {
+        //             ellipse.StartAngle = Vector2.Angle(startPoint) * MathHelper.RadToDeg;
+        //             ellipse.EndAngle = Vector2.Angle(endPoint) * MathHelper.RadToDeg;
+        //         }
+        //     }
+        // }
 
         private void SetColor(EntityObject entity, int argb)
         {
