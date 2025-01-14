@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Net.WebSockets;
 using System.Text;
+using System.Xml.XPath;
 using netDxf;
 using ACadSharp;
 using ACadSharp.Entities;
@@ -29,6 +30,7 @@ namespace CADability.DXF
             createdLayers = new Dictionary<Attribute.Layer, ACadSharp.Tables.Layer>();
             createdLinePatterns = new Dictionary<LinePattern, LineType>();
         }
+        // Can we export to bytes/steams in Acadsharp?
         // public byte[] WriteToByteArray(Project toExport)
         // {
         //     var memoryStream = new System.IO.MemoryStream();
@@ -113,7 +115,7 @@ namespace CADability.DXF
             {
                 SetAttributes(entity, geoObject);
                 SetUserData(entity, geoObject);
-                return new EntityObject[] { entity };
+                return new Entity[] { entity };
             }
             if (entities != null)
             {
@@ -340,8 +342,24 @@ namespace CADability.DXF
             }
             mc.vertices.AddRange(vertices);
         }
-        private netDxf.Entities.Text ExportText(GeoObject.Text text)
+        private ACadSharp.Entities.TextEntity ExportText(GeoObject.Text text)
         {
+            var textStyles = doc.TextStyles;
+            
+            var textEnt = new ACadSharp.Entities.TextEntity()
+            {
+                Value = text.TextString,
+                AlignmentPoint = new XYZ(text.Location.x, text.Location.y, text.Location.z),
+                Height = text.TextSize,
+                
+            };
+            // This is annoying
+            // Figure out how to check for existing text styles based on settings
+            if (textStyles.TryGetValue(text.Style.Name, out var style)) textEnt.Style = style;
+            else textEnt.Style = new TextStyle(text.Style.Name)
+            {
+                Filename = text.Style.,
+            }
             System.Drawing.FontStyle fs = System.Drawing.FontStyle.Regular;
             if (text.Bold) fs |= System.Drawing.FontStyle.Bold;
             if (text.Italic) fs |= System.Drawing.FontStyle.Italic;
