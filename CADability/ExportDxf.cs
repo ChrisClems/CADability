@@ -792,6 +792,7 @@ namespace CADability.DXF
             {
                 if (!createdLayers.TryGetValue(go.Layer, out ACadSharp.Tables.Layer layer))
                 {
+                    // TODO: Copy more layer data like color?
                     layer = new ACadSharp.Tables.Layer(go.Layer.Name);
                     doc.Layers.Add((Layer)layer);
                     createdLayers[go.Layer] = layer;
@@ -800,31 +801,29 @@ namespace CADability.DXF
             }
             if (go is ILinePattern lp && lp.LinePattern != null)
             {
-                if (!createdLinePatterns.TryGetValue(lp.LinePattern, out Linetype linetype))
+                if (!createdLinePatterns.TryGetValue(lp.LinePattern, out LineType linetype))
                 {
-                    List<LinetypeSegment> segments = new List<LinetypeSegment>();
+                    linetype = new LineType(lp.LinePattern.Name);
                     if (lp.LinePattern.Pattern != null)
                     {
                         for (int i = 0; i < lp.LinePattern.Pattern.Length; i++)
                         {
-                            LinetypeSegment ls;
-                            if ((i & 0x01) == 0) ls = new LinetypeSimpleSegment(lp.LinePattern.Pattern[i]);
-                            else ls = new LinetypeSimpleSegment(-lp.LinePattern.Pattern[i]);
-                            segments.Add(ls);
+                            LineType.Segment ls = new LineType.Segment();
+                            if ((i & 0x01) == 0) ls.Length = lp.LinePattern.Pattern[i];
+                            else ls.Length = -lp.LinePattern.Pattern[i];
+                            linetype.AddSegment(ls); 
                         }
                     }
-                    linetype = new Linetype(lp.LinePattern.Name);
-                    linetype.Segments.AddRange(segments);
-                    doc.Linetypes.Add(linetype);
+                    doc.LineTypes.Add(linetype);
                     createdLinePatterns[lp.LinePattern] = linetype;
                 }
-                entity.Linetype = linetype;
+                entity.LineType = linetype;
             }
             if (go is ILineWidth lw && lw.LineWidth != null)
             {
                 double minError = double.MaxValue;
-                Lineweight found = Lineweight.Default;
-                foreach (Lineweight lwe in Enum.GetValues(typeof(Lineweight)))
+                LineweightType found = LineweightType.Default;
+                foreach (LineweightType lwe in Enum.GetValues(typeof(LineweightType)))
                 {
                     double err = Math.Abs(((int)lwe) / 100.0 - lw.LineWidth.Width);
                     if (err < minError)
@@ -833,7 +832,7 @@ namespace CADability.DXF
                         found = lwe;
                     }
                 }
-                entity.Lineweight = found;
+                entity.LineWeight = found;
             }
         }
         private Vector3 Vector3(GeoPoint p)
