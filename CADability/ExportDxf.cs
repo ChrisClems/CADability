@@ -148,83 +148,88 @@ namespace CADability.DXF
 
             foreach (KeyValuePair<string, object> de in go.UserData)
             {
+                var exDataApp = new AppId("TestAppId");
+                var xDString = new ExtendedDataString("test");
+                var xDList = new List<ExtendedDataString>(){ xDString };
+                entity.ExtendedData.Add(exDataApp, xDList);
+                
                 // TODO: Do a deep dive into xData export.
-                // if (de.Value is ExtendedEntityData xData)
-                // {
-                //     ApplicationRegistry registry = new ApplicationRegistry(xData.ApplicationName);
-                //     XData data = new XData(registry);
-                //
-                //     foreach (KeyValuePair<DxfCode, object> item in xData.Data)
-                //     {
-                //         DxfCode code = item.Key;
-                //         //XDataCode code = item.Key;
-                //         object newValue = null;
-                //         //Make the export more robust to wrong XDataCode entries.
-                //         //Try to fit the data into an existing datatype. Otherwise ignore entry.
-                //         // TODO: This looks wildly incomplete. Run through thorough tests
-                //         switch (code)
-                //         {
-                //             case DxfCode.Int16:
-                //                 if (item.Value is short int16val_1)
-                //                     newValue = int16val_1;
-                //                 else if (item.Value is int int32val_1 && int32val_1 >= Int16.MinValue && int32val_1 <= Int16.MaxValue)
-                //                     newValue = Convert.ToInt16(int32val_1);
-                //                 else if (item.Value is long int64val_1 && int64val_1 >= Int16.MinValue && int64val_1 <= Int16.MaxValue)
-                //                     newValue = Convert.ToInt16(int64val_1);
-                //                 break;
-                //             case DxfCode.Int32:
-                //                 if (item.Value is short int16val_2)
-                //                     newValue = Convert.ToInt32(int16val_2);
-                //                 else if (item.Value is int int32val_2)
-                //                     newValue = int32val_2;
-                //                 else if (item.Value is long int64val_2 && int64val_2 >= Int32.MinValue && int64val_2 <= Int32.MaxValue)
-                //                     newValue = Convert.ToInt32(int64val_2);
-                //                 break;
-                //             default:
-                //                 newValue = item.Value;
-                //                 break;
-                //         }
-                //         
-                //         if (newValue != null)
-                //         {
-                //             xData.Data.Add(code, newValue);
-                //             data.Records.AddRange(new ExtendedDataRecord<>()[] {});
-                //             XDataRecord record = new XDataRecord(code, newValue);
-                //             data.XDataRecord.Add(record);
-                //         }
-                //     }
-                //     if (data.XDataRecord.Count > 0)
-                //         entity.XData.Add(data);
-                // }
-                // else
-                // {
-                //     ApplicationRegistry registry = new ApplicationRegistry(ApplicationRegistry.DefaultName);
-                //     XData data = new XData(registry);
-                //
-                //     XDataRecord record = null;
-                //
-                //     switch (de.Value)
-                //     {
-                //         case string strValue:
-                //             record = new XDataRecord(XDataCode.String, strValue);
-                //             break;
-                //         case short shrValue:
-                //             record = new XDataRecord(XDataCode.Int16, shrValue);
-                //             break;
-                //         case int intValue:
-                //             record = new XDataRecord(XDataCode.Int32, intValue);
-                //             break;
-                //         case double dblValue:
-                //             record = new XDataRecord(XDataCode.Real, dblValue);
-                //             break;
-                //         case byte[] bytValue:
-                //             record = new XDataRecord(XDataCode.BinaryData, bytValue);
-                //             break;
-                //     }
-                //
-                //     if (record != null)
-                //         data.XDataRecord.Add(record);
-                // }
+                if (de.Value is ExtendedEntityData xData)
+                {
+                    var exDataApp
+                    XData data = new XData(registry);
+                
+                    foreach (KeyValuePair<DxfCode, object> item in xData.Data)
+                    {
+                        DxfCode code = item.Key;
+                        //XDataCode code = item.Key;
+                        object newValue = null;
+                        //Make the export more robust to wrong XDataCode entries.
+                        //Try to fit the data into an existing datatype. Otherwise ignore entry.
+                        // TODO: This looks wildly incomplete. Run through thorough tests
+                        switch (code)
+                        {
+                            case DxfCode.Int16:
+                                if (item.Value is short int16val_1)
+                                    newValue = int16val_1;
+                                else if (item.Value is int int32val_1 && int32val_1 >= Int16.MinValue && int32val_1 <= Int16.MaxValue)
+                                    newValue = Convert.ToInt16(int32val_1);
+                                else if (item.Value is long int64val_1 && int64val_1 >= Int16.MinValue && int64val_1 <= Int16.MaxValue)
+                                    newValue = Convert.ToInt16(int64val_1);
+                                break;
+                            case DxfCode.Int32:
+                                if (item.Value is short int16val_2)
+                                    newValue = Convert.ToInt32(int16val_2);
+                                else if (item.Value is int int32val_2)
+                                    newValue = int32val_2;
+                                else if (item.Value is long int64val_2 && int64val_2 >= Int32.MinValue && int64val_2 <= Int32.MaxValue)
+                                    newValue = Convert.ToInt32(int64val_2);
+                                break;
+                            default:
+                                newValue = item.Value;
+                                break;
+                        }
+                        
+                        if (newValue != null)
+                        {
+                            xData.Data.Add(code, newValue);
+                            data.Records.AddRange(new ExtendedDataRecord<>()[] {});
+                            XDataRecord record = new XDataRecord(code, newValue);
+                            data.XDataRecord.Add(record);
+                        }
+                    }
+                    if (data.XDataRecord.Count > 0)
+                        entity.XData.Add(data);
+                }
+                else
+                {
+                    ApplicationRegistry registry = new ApplicationRegistry(ApplicationRegistry.DefaultName);
+                    XData data = new XData(registry);
+                
+                    XDataRecord record = null;
+                
+                    switch (de.Value)
+                    {
+                        case string strValue:
+                            record = new XDataRecord(XDataCode.String, strValue);
+                            break;
+                        case short shrValue:
+                            record = new XDataRecord(XDataCode.Int16, shrValue);
+                            break;
+                        case int intValue:
+                            record = new XDataRecord(XDataCode.Int32, intValue);
+                            break;
+                        case double dblValue:
+                            record = new XDataRecord(XDataCode.Real, dblValue);
+                            break;
+                        case byte[] bytValue:
+                            record = new XDataRecord(XDataCode.BinaryData, bytValue);
+                            break;
+                    }
+                
+                    if (record != null)
+                        data.XDataRecord.Add(record);
+                }
             }
         }
 
