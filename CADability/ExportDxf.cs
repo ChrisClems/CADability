@@ -585,18 +585,20 @@ namespace CADability.DXF
 
         private ACadSharp.Entities.Point ExportPoint(GeoObject.Point point)
         {
-            return new ACadSharp.Entities.Point(Vector3(point.Location));
+            return new ACadSharp.Entities.Point(new XYZ(point.Location.x, point.Location.y, point.Location.z));
         }
         private ACadSharp.Entities.Line ExportLine(GeoObject.Line line)
         {
-            return new ACadSharp.Entities.Line(Vector3(line.StartPoint), Vector3(line.EndPoint));
+            XYZ startPoint = new XYZ(line.StartPoint.x, line.StartPoint.y, line.StartPoint.z);
+            XYZ endPoint = new XYZ(line.EndPoint.x, line.EndPoint.y, line.EndPoint.z);
+            return new ACadSharp.Entities.Line(startPoint, endPoint);
         }
         private Entity ExportEllipse(GeoObject.Ellipse elli)
         {
             ACadSharp.Entities.Entity entity = null;
             if (elli.IsArc)
             {
-                Plane dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
+                Plane dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(new GeoPoint(elli.Plane.Normal.x, elli.Plane.Normal.y, elli.Plane.Normal.z)));
                 if (!elli.CounterClockWise) (elli.StartPoint, elli.EndPoint) = (elli.EndPoint, elli.StartPoint);
                 // Plane dxfPlane;
                 // if (elli.CounterClockWise) dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
@@ -841,14 +843,6 @@ namespace CADability.DXF
         private Vector3 Vector3(GeoPoint p)
         {
             return new Vector3(p.x, p.y, p.z);
-        }
-        private Vector3 Vector3(GeoVector v)
-        {
-            return new Vector3(v.x, v.y, v.z);
-        }
-        private netDxf.Matrix4 Matrix4(ModOp toText)
-        {
-            return new netDxf.Matrix4(toText[0, 0], toText[0, 1], toText[0, 2], toText[0, 3], toText[1, 0], toText[1, 1], toText[1, 2], toText[1, 3], toText[2, 0], toText[2, 1], toText[2, 2], toText[2, 3], 0, 0, 0, 1);
         }
         private string GetNextAnonymousBlockName()
         {
