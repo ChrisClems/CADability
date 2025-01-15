@@ -344,27 +344,78 @@ namespace CADability.DXF
         }
         private ACadSharp.Entities.TextEntity ExportText(GeoObject.Text text)
         {
-            var textStyles = doc.TextStyles;
+            FontFlags fontFlags = FontFlags.Regular;
+            
+            if (text.Bold) fontFlags |= FontFlags.Bold;
+            if (text.Italic) fontFlags |= FontFlags.Italic;
+
+            var newTextStyle = new TextStyle(text.Font)
+            {
+                Filename = text.Font,
+                TrueType = fontFlags,
+            };
+
+            foreach (var textStyle in doc.TextStyles)
+            {
+                if (newTextStyle.Filename == textStyle.Filename && newTextStyle.TrueType == textStyle.TrueType)
+                {
+                    newTextStyle = textStyle;
+                    break;
+                }
+            }
+            
+            var horizontalAignment = TextHorizontalAlignment.Left;
+            var verticalAlignment = TextVerticalAlignmentType.Baseline;
+
+            switch (text.LineAlignment)
+            {
+                case Text.LineAlignMode.Left:
+                    horizontalAignment = TextHorizontalAlignment.Left;
+                    break;
+                case Text.LineAlignMode.Center:
+                    horizontalAignment = TextHorizontalAlignment.Center;
+                    break;
+                case Text.LineAlignMode.Right:
+                    horizontalAignment = TextHorizontalAlignment.Right;
+                    break;
+            }
+
+            switch (text.Alignment)
+            {
+                case Text.AlignMode.Baseline:
+                    verticalAlignment = TextVerticalAlignmentType.Baseline;
+                    break;
+                case Text.AlignMode.Bottom:
+                    verticalAlignment = TextVerticalAlignmentType.Bottom;
+                    break;
+                case Text.AlignMode.Center:
+                    verticalAlignment = TextVerticalAlignmentType.Middle;
+                    break;
+                case Text.AlignMode.Top:
+                    verticalAlignment = TextVerticalAlignmentType.Top;
+                    break;
+            }
             
             var textEnt = new ACadSharp.Entities.TextEntity()
             {
                 Value = text.TextString,
+                InsertPoint = new XYZ(text.Location.x, text.Location.y, text.Location.z),
                 AlignmentPoint = new XYZ(text.Location.x, text.Location.y, text.Location.z),
+                Normal = new XYZ(text.Plane.Normal.x, text.Plane.Normal.y, text.Plane.Normal.z),
                 Height = text.TextSize,
-                
+                Rotation = ???,
+                VerticalAlignment = verticalAlignment,
+                HorizontalAlignment = horizontalAignment,
+                Style = newTextStyle,
             };
-            // This is annoying
-            // Figure out how to check for existing text styles based on settings
-            if (textStyles.TryGetValue(text.Style.Name, out var style)) textEnt.Style = style;
-            else textEnt.Style = new TextStyle(text.Style.Name)
-            {
-                Filename = text.Style.,
-            }
+
+            // Old code below. This is where I left off.
             System.Drawing.FontStyle fs = System.Drawing.FontStyle.Regular;
             if (text.Bold) fs |= System.Drawing.FontStyle.Bold;
             if (text.Italic) fs |= System.Drawing.FontStyle.Italic;
             System.Drawing.Font font = new System.Drawing.Font(text.Font, 1000.0f, fs);
-            netDxf.Entities.Text res = new netDxf.Entities.Text(text.TextString, Vector2.Zero, text.TextSize * 1000 / font.Height, new TextStyle(text.Font, text.Font + ".ttf"));
+            // Old font contructor. May have useful signature
+            //netDxf.Entities.Text res = new netDxf.Entities.Text(text.TextString, Vector2.Zero, text.TextSize * 1000 / font.Height, new TextStyle(text.Font, text.Font + ".ttf"));
             ModOp toText = ModOp.Fit(GeoPoint.Origin, new GeoVector[] { GeoVector.XAxis, GeoVector.YAxis, GeoVector.ZAxis }, text.Location, new GeoVector[] { text.LineDirection.Normalized, text.GlyphDirection.Normalized, text.LineDirection.Normalized ^ text.GlyphDirection.Normalized });
             res.TransformBy(Matrix4(toText)); // easier than setting normal and rotation
             return res;
