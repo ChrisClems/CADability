@@ -3,6 +3,7 @@ using CADability.GeoObject;
 using MathNet.Numerics.Statistics.Mcmc;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.WebSockets;
 using System.Text;
 using System.Xml.XPath;
@@ -11,6 +12,7 @@ using ACadSharp;
 using ACadSharp.Entities;
 using ACadSharp.IO;
 using ACadSharp.Tables;
+using ACadSharp.XData;
 using CSMath;
 using Color = System.Drawing.Color;
 using Layer = ACadSharp.Tables.Layer;
@@ -123,12 +125,12 @@ namespace CADability.DXF
                 {
                     if (geoObject.Layer == null)
                     {
-                        entities[i].Layer = netDxf.Tables.Layer.Default;
+                        entities[i].Layer = ACadSharp.Tables.Layer.Default;
                         continue;
                     }
-                    if (!createdLayers.TryGetValue(geoObject.Layer, out netDxf.Tables.Layer layer))
+                    if (!createdLayers.TryGetValue(geoObject.Layer, out ACadSharp.Tables.Layer layer))
                     {
-                        layer = new netDxf.Tables.Layer(geoObject.Layer.Name);
+                        layer = new ACadSharp.Tables.Layer(geoObject.Layer.Name);
                         doc.Layers.Add((Layer)layer);
                         createdLayers[geoObject.Layer] = layer;
                     }
@@ -139,85 +141,90 @@ namespace CADability.DXF
             return null;
         }
 
-        private void SetUserData(netDxf.Entities.EntityObject entity, IGeoObject go)
+        private void SetUserData(ACadSharp.Entities.Entity entity, IGeoObject go)
         {
             if (entity is null || go is null || go.UserData is null || go.UserData.Count == 0)
                 return;
 
             foreach (KeyValuePair<string, object> de in go.UserData)
             {
-                if (de.Value is ExtendedEntityData xData)
-                {
-                    ApplicationRegistry registry = new ApplicationRegistry(xData.ApplicationName);
-                    XData data = new XData(registry);
-
-                    foreach (KeyValuePair<DxfCode, object> item in xData.Data)
-                    {
-                        XDataCode code = item.Key;
-                        object newValue = null;
-                        //Make the export more robust to wrong XDataCode entries.
-                        //Try to fit the data into an existing datatype. Otherwise ignore entry.
-                        switch (code)
-                        {
-                            case XDataCode.Int16:
-                                if (item.Value is short int16val_1)
-                                    newValue = int16val_1;
-                                else if (item.Value is int int32val_1 && int32val_1 >= Int16.MinValue && int32val_1 <= Int16.MaxValue)
-                                    newValue = Convert.ToInt16(int32val_1);
-                                else if (item.Value is long int64val_1 && int64val_1 >= Int16.MinValue && int64val_1 <= Int16.MaxValue)
-                                    newValue = Convert.ToInt16(int64val_1);
-                                break;
-                            case XDataCode.Int32:
-                                if (item.Value is short int16val_2)
-                                    newValue = Convert.ToInt32(int16val_2);
-                                else if (item.Value is int int32val_2)
-                                    newValue = int32val_2;
-                                else if (item.Value is long int64val_2 && int64val_2 >= Int32.MinValue && int64val_2 <= Int32.MaxValue)
-                                    newValue = Convert.ToInt32(int64val_2);
-                                break;
-                            default:
-                                newValue = item.Value;
-                                break;
-                        }
-
-                        if (newValue != null)
-                        {
-                            XDataRecord record = new XDataRecord(code, newValue);
-                            data.XDataRecord.Add(record);
-                        }
-                    }
-                    if (data.XDataRecord.Count > 0)
-                        entity.XData.Add(data);
-                }
-                else
-                {
-                    ApplicationRegistry registry = new ApplicationRegistry(ApplicationRegistry.DefaultName);
-                    XData data = new XData(registry);
-
-                    XDataRecord record = null;
-
-                    switch (de.Value)
-                    {
-                        case string strValue:
-                            record = new XDataRecord(XDataCode.String, strValue);
-                            break;
-                        case short shrValue:
-                            record = new XDataRecord(XDataCode.Int16, shrValue);
-                            break;
-                        case int intValue:
-                            record = new XDataRecord(XDataCode.Int32, intValue);
-                            break;
-                        case double dblValue:
-                            record = new XDataRecord(XDataCode.Real, dblValue);
-                            break;
-                        case byte[] bytValue:
-                            record = new XDataRecord(XDataCode.BinaryData, bytValue);
-                            break;
-                    }
-
-                    if (record != null)
-                        data.XDataRecord.Add(record);
-                }
+                // TODO: Do a deep dive into xData export.
+                // if (de.Value is ExtendedEntityData xData)
+                // {
+                //     ApplicationRegistry registry = new ApplicationRegistry(xData.ApplicationName);
+                //     XData data = new XData(registry);
+                //
+                //     foreach (KeyValuePair<DxfCode, object> item in xData.Data)
+                //     {
+                //         DxfCode code = item.Key;
+                //         //XDataCode code = item.Key;
+                //         object newValue = null;
+                //         //Make the export more robust to wrong XDataCode entries.
+                //         //Try to fit the data into an existing datatype. Otherwise ignore entry.
+                //         // TODO: This looks wildly incomplete. Run through thorough tests
+                //         switch (code)
+                //         {
+                //             case DxfCode.Int16:
+                //                 if (item.Value is short int16val_1)
+                //                     newValue = int16val_1;
+                //                 else if (item.Value is int int32val_1 && int32val_1 >= Int16.MinValue && int32val_1 <= Int16.MaxValue)
+                //                     newValue = Convert.ToInt16(int32val_1);
+                //                 else if (item.Value is long int64val_1 && int64val_1 >= Int16.MinValue && int64val_1 <= Int16.MaxValue)
+                //                     newValue = Convert.ToInt16(int64val_1);
+                //                 break;
+                //             case DxfCode.Int32:
+                //                 if (item.Value is short int16val_2)
+                //                     newValue = Convert.ToInt32(int16val_2);
+                //                 else if (item.Value is int int32val_2)
+                //                     newValue = int32val_2;
+                //                 else if (item.Value is long int64val_2 && int64val_2 >= Int32.MinValue && int64val_2 <= Int32.MaxValue)
+                //                     newValue = Convert.ToInt32(int64val_2);
+                //                 break;
+                //             default:
+                //                 newValue = item.Value;
+                //                 break;
+                //         }
+                //         
+                //         if (newValue != null)
+                //         {
+                //             xData.Data.Add(code, newValue);
+                //             data.Records.AddRange(new ExtendedDataRecord<>()[] {});
+                //             XDataRecord record = new XDataRecord(code, newValue);
+                //             data.XDataRecord.Add(record);
+                //         }
+                //     }
+                //     if (data.XDataRecord.Count > 0)
+                //         entity.XData.Add(data);
+                // }
+                // else
+                // {
+                //     ApplicationRegistry registry = new ApplicationRegistry(ApplicationRegistry.DefaultName);
+                //     XData data = new XData(registry);
+                //
+                //     XDataRecord record = null;
+                //
+                //     switch (de.Value)
+                //     {
+                //         case string strValue:
+                //             record = new XDataRecord(XDataCode.String, strValue);
+                //             break;
+                //         case short shrValue:
+                //             record = new XDataRecord(XDataCode.Int16, shrValue);
+                //             break;
+                //         case int intValue:
+                //             record = new XDataRecord(XDataCode.Int32, intValue);
+                //             break;
+                //         case double dblValue:
+                //             record = new XDataRecord(XDataCode.Real, dblValue);
+                //             break;
+                //         case byte[] bytValue:
+                //             record = new XDataRecord(XDataCode.BinaryData, bytValue);
+                //             break;
+                //     }
+                //
+                //     if (record != null)
+                //         data.XDataRecord.Add(record);
+                // }
             }
         }
 
@@ -732,28 +739,24 @@ namespace CADability.DXF
         //     }
         // }
 
-        private void SetColor(EntityObject entity, int argb)
+        private void SetColor(Entity entity, int colorIndex)
         {
-            AciColor clr;
-            if (argb.Equals(Color.White.ToArgb()) || argb.Equals(Color.Black.ToArgb()))
+            if (colorIndex.Equals(Color.White.ToArgb()) || colorIndex.Equals(Color.Black.ToArgb()))
             {
-                clr = AciColor.Default;
+                // White/black index
+                entity.Color = new ACadSharp.Color(7);
             }
             else
             {
-                clr = AciColor.FromTrueColor(argb);
-                if (clr.Index > 0 && clr.Index < 256)
+                if (colorIndex > 0 && colorIndex < 256)
                 {
-                    var indexColor = AciColor.FromCadIndex(clr.Index);
-                    if (indexColor.ToColor().ToArgb().Equals(argb))
-                    {
-                        // if the color matches the index color exactly
-                        // we don't need to use TruColor
-                        clr.UseTrueColor = false;
-                    }
+                    entity.Color = new ACadSharp.Color((short)colorIndex);
+                }
+                else if (colorIndex > 255)
+                {
+                    entity.Color = ACadSharp.Color.FromTrueColor((uint)colorIndex);
                 }
             }
-            entity.Color = clr;
         }
         private void SetAttributes(Entity entity, IGeoObject go)
         {
