@@ -151,7 +151,7 @@ namespace CADability.DXF
                     ApplicationRegistry registry = new ApplicationRegistry(xData.ApplicationName);
                     XData data = new XData(registry);
 
-                    foreach (var item in xData.Data)
+                    foreach (KeyValuePair<DxfCode, object> item in xData.Data)
                     {
                         XDataCode code = item.Key;
                         object newValue = null;
@@ -344,18 +344,27 @@ namespace CADability.DXF
         }
         private ACadSharp.Entities.TextEntity ExportText(GeoObject.Text textGeoObj)
         {
+            string textValue = textGeoObj.TextString;
+            // TODO: Use Text.FourPoints to use TextEntity.AlignmentPoint for rotation?
             FontFlags fontFlags = FontFlags.Regular;
             
             if (textGeoObj.Bold) fontFlags |= FontFlags.Bold;
             if (textGeoObj.Italic) fontFlags |= FontFlags.Italic;
+            if (textGeoObj.Underline) textValue = textValue.Insert(0, "%%U");
+            if (textGeoObj.Strikeout) textValue = textValue.Insert(0, "%%K");
+            // TODO: Calculate oblique angle from glyph direction and line direction
 
-            var textStyleDxf = new TextStyle(textGeoObj.Font)
+            TextStyle textStyleDxf = new TextStyle(textGeoObj.Font)
             {
                 Filename = textGeoObj.Font,
-                TrueType = fontFlags,
             };
 
-            foreach (var textStyle in doc.TextStyles)
+            if (System.IO.Path.GetExtension(textGeoObj.Font).ToLower() == ".ttf")
+            {
+                textStyleDxf.TrueType = fontFlags;
+            }
+
+            foreach (TextStyle textStyle in doc.TextStyles)
             {
                 if (textStyleDxf.Filename == textStyle.Filename && textStyleDxf.TrueType == textStyle.TrueType)
                 {
@@ -363,9 +372,23 @@ namespace CADability.DXF
                     break;
                 }
             }
+
+            switch (textGeoObj.ColorDef.Source)
+            {
+                case ColorDef.ColorSource.fromObject:
+                    break;
+                case ColorDef.ColorSource.fromParent:
+                    break;
+                case ColorDef.ColorSource.fromName:
+                    break;
+                case ColorDef.ColorSource.fromStyle:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
             
-            var horizontalAignment = TextHorizontalAlignment.Left;
-            var verticalAlignment = TextVerticalAlignmentType.Baseline;
+            TextHorizontalAlignment horizontalAignment = TextHorizontalAlignment.Left;
+            TextVerticalAlignmentType verticalAlignment = TextVerticalAlignmentType.Baseline;
 
             switch (textGeoObj.LineAlignment)
             {
@@ -396,9 +419,9 @@ namespace CADability.DXF
                     break;
             }
             
-            var textEnt = new ACadSharp.Entities.TextEntity()
+            TextEntity textEnt = new ACadSharp.Entities.TextEntity()
             {
-                Value = textGeoObj.TextString,
+                Value = textValue,
                 InsertPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
                 AlignmentPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
                 Normal = new XYZ(textGeoObj.Plane.Normal.x, textGeoObj.Plane.Normal.y, textGeoObj.Plane.Normal.z),
@@ -408,9 +431,10 @@ namespace CADability.DXF
                 HorizontalAlignment = horizontalAignment,
                 Style = textStyleDxf,
             };
+            SetAttributes(textEnt, textGeoObj);
             return textEnt;
 
-            // // Old code below. This is where I left off.
+            // // Old code below. Preserved for troubleshooting positioning
             // System.Drawing.FontStyle fs = System.Drawing.FontStyle.Regular;
             // if (textGeoObj.Bold) fs |= System.Drawing.FontStyle.Bold;
             // if (textGeoObj.Italic) fs |= System.Drawing.FontStyle.Italic;
@@ -428,8 +452,8 @@ namespace CADability.DXF
             // What's TableObject. Do I need to validate names?
             char[] invalidCharacters = { '\\', '/', ':', '*', '?', '"', '<', '>', '|', ';', ',', '=', '`' };
             if (name == null || doc.BlockRecords.Contains(name) || name.IndexOfAny(invalidCharacters) > -1) name = GetNextAnonymousBlockName();
-            var acBlock = new ACadSharp.Tables.BlockRecord(name);
-            foreach (var entity in blk.Children)
+            BlockRecord acBlock = new ACadSharp.Tables.BlockRecord(name);
+            foreach (IGeoObject entity in blk.Children)
             {
                 acBlock.Entities.AddRange(GeoObjectToEntity(entity));
             }
@@ -438,8 +462,8 @@ namespace CADability.DXF
         }
         private ACadSharp.Entities.Insert ExportPath(Path path)
         {
-            var acBlock = new ACadSharp.Tables.BlockRecord(GetNextAnonymousBlockName());
-            foreach (var curve in path.Curves)
+            BlockRecord acBlock = new ACadSharp.Tables.BlockRecord(GetNextAnonymousBlockName());
+            foreach (ICurve curve in path.Curves)
             {
                 Entity[] curveEntity = GeoObjectToEntity(curve as IGeoObject);
                 if (curve != null) acBlock.Entities.AddRange(curveEntity);
@@ -489,17 +513,17 @@ namespace CADability.DXF
         private ACadSharp.Entities.Polyline3D ExportPolyline(GeoObject.Polyline goPolyline)
         {
             //TODO: Check if a new method for Polyline2D (old LwPolyline) is necessary
-            var polyline = new ACadSharp.Entities.Polyline3D();
+            Polyline3D polyline = new ACadSharp.Entities.Polyline3D();
             for (int i = 0; i < goPolyline.Vertices.Length; i++)
             {
-                var vert = new ACadSharp.Entities.Vertex2D();
+                Vertex2D vert = new ACadSharp.Entities.Vertex2D();
                 vert.Location = new XYZ(goPolyline.Vertices[i].x, goPolyline.Vertices[i].y, goPolyline.Vertices[i].z);
                 polyline.Vertices.Add(vert);
             }
 
             if (goPolyline.IsClosed)
             {
-                var endVert = new ACadSharp.Entities.Vertex2D();
+                Vertex2D endVert = new ACadSharp.Entities.Vertex2D();
                 endVert.Location = new XYZ(goPolyline.Vertices[0].x, goPolyline.Vertices[0].y, goPolyline.Vertices[0].z);
                 polyline.Vertices.Add(endVert);
             }
