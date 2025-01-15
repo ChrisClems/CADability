@@ -250,72 +250,100 @@ namespace CADability.DXF
                 return res.ToArray();
             }
         }
-        private netDxf.Entities.EntityObject ExportFace(GeoObject.Face face)
+        private ACadSharp.Entities.Entity ExportFace(GeoObject.Face face)
         {
+            // TODO: Lots of duplicate code in exporting meshes and polyfacemeshes. Condense to new methods.
             if (Settings.GlobalSettings.GetBoolValue("DxfImport.UseMesh", false))
             {
-                if (face.Surface is PlaneSurface ps)
+                if (face.Surface is PlaneSurface)
                 {
                     if (face.OutlineEdges.Length == 4 && face.OutlineEdges[0].Curve3D is GeoObject.Line && face.OutlineEdges[1].Curve3D is GeoObject.Line && face.OutlineEdges[2].Curve3D is GeoObject.Line && face.OutlineEdges[3].Curve3D is GeoObject.Line)
                     {
                         // 4 lines, export as a simple PolyfaceMesh with 4 vertices
-                        List<Vector3> vertices = new List<Vector3>();
+                        List<XYZ> vertices = new List<XYZ>();
                         for (int i = 0; i < 4; i++)
                         {
-                            vertices.Add(Vector3(face.OutlineEdges[i].StartVertex(face).Position));
+                            vertices.Add(new XYZ(face.OutlineEdges[i].StartVertex(face).Position.x, face.OutlineEdges[i].StartVertex(face).Position.y, face.OutlineEdges[i].StartVertex(face).Position.z));
                         }
-                        netDxf.Entities.Mesh res = new Mesh(vertices, new int[][] { new int[] { 0, 1, 2, 3 } });
+                        ACadSharp.Entities.Mesh res = new Mesh()
+                        {
+                            Vertices = vertices,
+                            Faces = new List<int[]> { new int[] { 0, 1, 2, 3 } },
+                        };
                         SetAttributes(res, face);
                         return res;
                     }
                 }
                 {
-                    face.GetTriangulation(triangulationPrecision, out GeoPoint[] trianglePoint, out GeoPoint2D[] triangleUVPoint, out int[] triangleIndex, out BoundingCube triangleExtent);
-                    int[][] indices = new int[triangleIndex.Length / 3][];
+                    face.GetTriangulation(triangulationPrecision, out GeoPoint[] trianglePoint, out _, out int[] triangleIndex, out _);
+                    List<int[]> indices = new List<int[]>();
                     for (int i = 0; i < triangleIndex.Length - 2; i += 3)
                     {   // it is strange, but the indices must be +1
                         indices[i / 3] = new int[] { triangleIndex[i], triangleIndex[i + 1], triangleIndex[i + 2] };
                     }
-                    Vector3[] vertices = new Vector3[trianglePoint.Length];
-                    for (int i = 0; i < trianglePoint.Length; i++)
+                    List<XYZ> vertices = new List<XYZ>();
+                    foreach (var item in trianglePoint)
                     {
-                        vertices[i] = Vector3(trianglePoint[i]);
+                        vertices.Add(new XYZ(item.x, item.y, item.z));
                     }
-                    Mesh res = new Mesh(vertices, indices);
+
+                    Mesh res = new Mesh()
+                    {
+                        Vertices = vertices,
+                        Faces = indices,
+                    };
+                    
                     SetAttributes(res, face);
                     return res;
                 }
             }
             else
             {
-                if (face.Surface is PlaneSurface ps)
+                if (face.Surface is PlaneSurface)
                 {
                     if (face.OutlineEdges.Length == 4 && face.OutlineEdges[0].Curve3D is GeoObject.Line && face.OutlineEdges[1].Curve3D is GeoObject.Line && face.OutlineEdges[2].Curve3D is GeoObject.Line && face.OutlineEdges[3].Curve3D is GeoObject.Line)
                     {
+                        ACadSharp.Entities.PolyfaceMesh res = new PolyfaceMesh();
                         // 4 lines, export as a simple PolyfaceMesh with 4 vertices
-                        List<Vector3> vertices = new List<Vector3>();
-                        for (int i = 0; i < 4; i++)
+                        foreach (var item in face.OutlineEdges)
                         {
-                            vertices.Add(Vector3(face.OutlineEdges[i].StartVertex(face).Position));
+                            var vert = new Vertex3D();
+                            vert.Location = new XYZ(item.StartVertex(face).Position.x, item.StartVertex(face).Position.y, item.StartVertex(face).Position.z);
+                            res.Vertices.Add(vert);
                         }
-                        netDxf.Entities.PolyfaceMesh res = new PolyfaceMesh(vertices, new short[][] { new short[] { 1, 2, 3, 4 } });
+                        var vtexFaceRecord = new VertexFaceRecord()
+                        {
+                            Index1 = 1,
+                            Index2 = 2,
+                            Index3 = 3,
+                            Index4 = 4,
+                        };
+                        res.Faces.Add(vtexFaceRecord);
                         SetAttributes(res, face);
                         return res;
                     }
                 }
                 {
-                    face.GetTriangulation(triangulationPrecision, out GeoPoint[] trianglePoint, out GeoPoint2D[] triangleUVPoint, out int[] triangleIndex, out BoundingCube triangleExtent);
-                    short[][] indices = new short[triangleIndex.Length / 3][];
+                    ACadSharp.Entities.PolyfaceMesh res = new PolyfaceMesh();
+                    face.GetTriangulation(triangulationPrecision, out GeoPoint[] trianglePoint, out _, out int[] triangleIndex, out _);
+                    List<int[]> indices = new List<int[]>();
                     for (int i = 0; i < triangleIndex.Length - 2; i += 3)
                     {   // it is strange, but the indices must be +1
-                        indices[i / 3] = new short[] { (short)(triangleIndex[i] + 1), (short)(triangleIndex[i + 1] + 1), (short)(triangleIndex[i + 2] + 1) };
+                        indices[i / 3] = new int[] { triangleIndex[i], triangleIndex[i + 1], triangleIndex[i + 2] };
                     }
-                    Vector3[] vertices = new Vector3[trianglePoint.Length];
-                    for (int i = 0; i < trianglePoint.Length; i++)
+                    foreach (var item in trianglePoint)
                     {
-                        vertices[i] = Vector3(trianglePoint[i]);
+                        res.Vertices.Add(new Vertex3D() { Location = new XYZ(item.x, item.y, item.z) });
                     }
-                    PolyfaceMesh res = new PolyfaceMesh(vertices, indices);
+
+                    var vtexFaceRecord = new VertexFaceRecord()
+                    {
+                        Index1 = 1,
+                        Index2 = 2,
+                        Index3 = 3,
+                    };
+                    
+                    res.Faces.Add(vtexFaceRecord);
                     SetAttributes(res, face);
                     return res;
                 }
