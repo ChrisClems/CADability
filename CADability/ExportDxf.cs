@@ -221,21 +221,23 @@ namespace CADability.DXF
             }
         }
 
-        private EntityObject[] ExportShell(GeoObject.Shell shell)
+        private Entity[] ExportShell(GeoObject.Shell shell)
         {
+            // TODO: Export as full multi-face polyfacemesh instead of array of single-face polyfacemeshes?
+            // Look at Shell type and see how it can better be translated to a Dxf entitity
             if (Settings.GlobalSettings.GetBoolValue("DxfImport.SingleMeshPerFace", false))
             {
-                List<EntityObject> res = new List<EntityObject>();
+                List<Entity> res = new List<Entity>();
                 for (int i = 0; i < shell.Faces.Length; i++)
                 {
-                    EntityObject mesh = ExportFace(shell.Faces[i]);
+                    Entity mesh = ExportFace(shell.Faces[i]);
                     if (mesh != null) res.Add(mesh);
                 }
                 return res.ToArray();
             }
             else
             {
-                List<EntityObject> res = new List<EntityObject>();
+                List<Entity> res = new List<Entity>();
                 Dictionary<int, (List<Vector3>, List<short[]>)> mesh = new Dictionary<int, (List<Vector3>, List<short[]>)>();
                 for (int i = 0; i < shell.Faces.Length; i++)
                 {
@@ -243,9 +245,25 @@ namespace CADability.DXF
                 }
                 foreach (KeyValuePair<int, (List<Vector3> vertices, List<short[]> indices)> item in mesh)
                 {
-                    PolyfaceMesh pfm = new PolyfaceMesh(item.Value.vertices, item.Value.indices);
+                    PolyfaceMesh pfm = new PolyfaceMesh();
+                    foreach (var vert in item.Value.vertices)
+                    {
+                        pfm.Vertices.Add(new Vertex3D() { Location = new XYZ(vert.X, vert.Y, vert.Z) });
+                    }
+                    VertexFaceRecord faceRecord = new VertexFaceRecord();
+                    if (item.Value.indices.Count >= 3)
+                    {
+                        faceRecord.Index1 = (short)item.Value.indices[0][0];
+                        faceRecord.Index2 = (short)item.Value.indices[0][1];
+                        faceRecord.Index3 = (short)item.Value.indices[0][2];
+                    }
+
+                    if (item.Value.indices.Count == 4)
+                    {
+                        faceRecord.Index4 = (short)item.Value.indices[0][3];
+                    } pfm.Faces.Add(faceRecord);
                     SetColor(pfm, item.Key);
-                    res.Add((EntityObject)pfm);
+                    res.Add((Entity)pfm);
                 }
                 return res.ToArray();
             }
