@@ -342,24 +342,24 @@ namespace CADability.DXF
             }
             mc.vertices.AddRange(vertices);
         }
-        private ACadSharp.Entities.TextEntity ExportText(GeoObject.Text text)
+        private ACadSharp.Entities.TextEntity ExportText(GeoObject.Text textGeoObj)
         {
             FontFlags fontFlags = FontFlags.Regular;
             
-            if (text.Bold) fontFlags |= FontFlags.Bold;
-            if (text.Italic) fontFlags |= FontFlags.Italic;
+            if (textGeoObj.Bold) fontFlags |= FontFlags.Bold;
+            if (textGeoObj.Italic) fontFlags |= FontFlags.Italic;
 
-            var newTextStyle = new TextStyle(text.Font)
+            var textStyleDxf = new TextStyle(textGeoObj.Font)
             {
-                Filename = text.Font,
+                Filename = textGeoObj.Font,
                 TrueType = fontFlags,
             };
 
             foreach (var textStyle in doc.TextStyles)
             {
-                if (newTextStyle.Filename == textStyle.Filename && newTextStyle.TrueType == textStyle.TrueType)
+                if (textStyleDxf.Filename == textStyle.Filename && textStyleDxf.TrueType == textStyle.TrueType)
                 {
-                    newTextStyle = textStyle;
+                    textStyleDxf = textStyle;
                     break;
                 }
             }
@@ -367,7 +367,7 @@ namespace CADability.DXF
             var horizontalAignment = TextHorizontalAlignment.Left;
             var verticalAlignment = TextVerticalAlignmentType.Baseline;
 
-            switch (text.LineAlignment)
+            switch (textGeoObj.LineAlignment)
             {
                 case Text.LineAlignMode.Left:
                     horizontalAignment = TextHorizontalAlignment.Left;
@@ -380,7 +380,7 @@ namespace CADability.DXF
                     break;
             }
 
-            switch (text.Alignment)
+            switch (textGeoObj.Alignment)
             {
                 case Text.AlignMode.Baseline:
                     verticalAlignment = TextVerticalAlignmentType.Baseline;
@@ -398,27 +398,28 @@ namespace CADability.DXF
             
             var textEnt = new ACadSharp.Entities.TextEntity()
             {
-                Value = text.TextString,
-                InsertPoint = new XYZ(text.Location.x, text.Location.y, text.Location.z),
-                AlignmentPoint = new XYZ(text.Location.x, text.Location.y, text.Location.z),
-                Normal = new XYZ(text.Plane.Normal.x, text.Plane.Normal.y, text.Plane.Normal.z),
-                Height = text.TextSize,
-                Rotation = ???,
+                Value = textGeoObj.TextString,
+                InsertPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
+                AlignmentPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
+                Normal = new XYZ(textGeoObj.Plane.Normal.x, textGeoObj.Plane.Normal.y, textGeoObj.Plane.Normal.z),
+                Height = textGeoObj.TextSize,
+                Rotation = new Angle(textGeoObj.LineDirection.To2D()),
                 VerticalAlignment = verticalAlignment,
                 HorizontalAlignment = horizontalAignment,
-                Style = newTextStyle,
+                Style = textStyleDxf,
             };
+            return textEnt;
 
-            // Old code below. This is where I left off.
-            System.Drawing.FontStyle fs = System.Drawing.FontStyle.Regular;
-            if (text.Bold) fs |= System.Drawing.FontStyle.Bold;
-            if (text.Italic) fs |= System.Drawing.FontStyle.Italic;
-            System.Drawing.Font font = new System.Drawing.Font(text.Font, 1000.0f, fs);
-            // Old font contructor. May have useful signature
-            //netDxf.Entities.Text res = new netDxf.Entities.Text(text.TextString, Vector2.Zero, text.TextSize * 1000 / font.Height, new TextStyle(text.Font, text.Font + ".ttf"));
-            ModOp toText = ModOp.Fit(GeoPoint.Origin, new GeoVector[] { GeoVector.XAxis, GeoVector.YAxis, GeoVector.ZAxis }, text.Location, new GeoVector[] { text.LineDirection.Normalized, text.GlyphDirection.Normalized, text.LineDirection.Normalized ^ text.GlyphDirection.Normalized });
-            res.TransformBy(Matrix4(toText)); // easier than setting normal and rotation
-            return res;
+            // // Old code below. This is where I left off.
+            // System.Drawing.FontStyle fs = System.Drawing.FontStyle.Regular;
+            // if (textGeoObj.Bold) fs |= System.Drawing.FontStyle.Bold;
+            // if (textGeoObj.Italic) fs |= System.Drawing.FontStyle.Italic;
+            // System.Drawing.Font font = new System.Drawing.Font(textGeoObj.Font, 1000.0f, fs);
+            // // Old font contructor. May have useful signature
+            // //netDxf.Entities.Text res = new netDxf.Entities.Text(text.TextString, Vector2.Zero, text.TextSize * 1000 / font.Height, new TextStyle(text.Font, text.Font + ".ttf"));
+            // ModOp toText = ModOp.Fit(GeoPoint.Origin, new GeoVector[] { GeoVector.XAxis, GeoVector.YAxis, GeoVector.ZAxis }, textGeoObj.Location, new GeoVector[] { textGeoObj.LineDirection.Normalized, textGeoObj.GlyphDirection.Normalized, textGeoObj.LineDirection.Normalized ^ textGeoObj.GlyphDirection.Normalized });
+            // res.TransformBy(Matrix4(toText)); // easier than setting normal and rotation
+            // return res;
         }
 
         private ACadSharp.Entities.Insert ExportBlock(GeoObject.Block blk)

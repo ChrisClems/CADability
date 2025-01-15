@@ -451,8 +451,8 @@ namespace CADability.DXF
             double sweep = end - start;
             if (sweep < 0.0) sweep += Math.PI * 2.0;
             //if (sweep < Precision.epsa) sweep = Math.PI * 2.0;
-            if (start == end) sweep = 0.0;
-            if (start == Math.PI * 2.0 && end == 0.0) sweep = 0.0; // see in modena.dxf
+            if (Math.Abs(start - end) < Precision.eps) sweep = 0.0;
+            if (Math.Abs(start - Math.PI * 2.0) < Precision.eps && end == 0.0) sweep = 0.0; // see in modena.dxf
             // Arcs are always counterclockwise, but maybe the normal is (0,0,-1) in 2D drawings.
             e.SetArcPlaneCenterRadiusAngles(plane, cnt, arc.Radius, start, sweep);
 
@@ -574,12 +574,12 @@ namespace CADability.DXF
                     List<int> splitKnots = new List<int>();
                     for (int i = degree + 1; i < kn.Length - degree - 1; i++)
                     {
-                        if (kn[i] == kn[i - 1])
+                        if (Math.Abs(kn[i] - kn[i - 1]) < Precision.eps)
                         {
                             bool sameKnot = true;
                             for (int j = 0; j < degree; j++)
                             {
-                                if (kn[i - 1] != kn[i + j]) sameKnot = false;
+                                if (Math.Abs(kn[i - 1] - kn[i + j]) > Precision.eps) sameKnot = false;
                             }
                             if (sameKnot) splitKnots.Add(i - 1);
                         }
