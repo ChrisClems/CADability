@@ -755,36 +755,44 @@ namespace CADability.DXF
             }
             entity.Color = clr;
         }
-        private void SetAttributes(EntityObject entity, IGeoObject go)
+        private void SetAttributes(Entity entity, IGeoObject go)
         {
             if (go is IColorDef cd && cd.ColorDef != null)
             {
-                AciColor clr;
-                if (cd.ColorDef.Color.ToArgb().Equals(Color.White.ToArgb()) || cd.ColorDef.Color.ToArgb().Equals(Color.Black.ToArgb()))
+                ACadSharp.Color color = new ACadSharp.Color();
+                switch (cd.ColorDef.Source)
                 {
-                    clr = AciColor.Default;
-                }
-                else
-                {
-                    clr = AciColor.FromTrueColor(cd.ColorDef.Color.ToArgb());
-                    if (clr.Index > 0 && clr.Index < 256)
-                    {
-                        var indexColor = AciColor.FromCadIndex(clr.Index);
-                        if (indexColor.ToColor().ToArgb().Equals(cd.ColorDef.Color.ToArgb()))
+                    case ColorDef.ColorSource.fromParent:
+                        color = new ACadSharp.Color(ACadSharp.Color.ByBlock.Index);
+                        entity.Transparency = Transparency.ByBlock;
+                        break;
+                    case ColorDef.ColorSource.fromStyle:
+                        color = new ACadSharp.Color(ACadSharp.Color.ByLayer.Index);
+                        entity.Transparency = Transparency.ByLayer;
+                        break;
+                    // Not sure what fromName is
+                    case ColorDef.ColorSource.fromName:
+                    case ColorDef.ColorSource.fromObject:
+                        // Convert ARGB alpha channel to AutoCAD transparency
+                        entity.Transparency = new Transparency((byte)((short)((cd.ColorDef.Color.A / 255.0) * 90)));
+                        if (cd.ColorDef.Color.ToArgb().Equals(Color.White.ToArgb()) || cd.ColorDef.Color.ToArgb().Equals(Color.Black.ToArgb()))
                         {
-                            // if the color matches the index color exactly
-                            // we don't need to use TruColor
-                            clr.UseTrueColor = false;
+                            // White/black index
+                            color = new ACadSharp.Color(7);
                         }
-                    }
+                        else
+                        {
+                            color = new ACadSharp.Color(cd.ColorDef.Color.R, cd.ColorDef.Color.G, cd.ColorDef.Color.B);
+                        }
+                        break;;
                 }
-                entity.Color = clr;
+                entity.Color = color;
             }
             if (go.Layer != null)
             {
-                if (!createdLayers.TryGetValue(go.Layer, out netDxf.Tables.Layer layer))
+                if (!createdLayers.TryGetValue(go.Layer, out ACadSharp.Tables.Layer layer))
                 {
-                    layer = new netDxf.Tables.Layer(go.Layer.Name);
+                    layer = new ACadSharp.Tables.Layer(go.Layer.Name);
                     doc.Layers.Add((Layer)layer);
                     createdLayers[go.Layer] = layer;
                 }
