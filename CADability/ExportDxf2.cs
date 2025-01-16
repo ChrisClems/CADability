@@ -233,16 +233,16 @@ namespace CADability.DXF
                                     break;
                                 default:
                                     // How gracefully should we fail on unknown DxfCodes?
-                                    #if(DEBUG)
+#if(DEBUG)
                                     throw (new Exception("Unknown DxfCode: " + code));
-                                    #endif
+#endif
                             }
                         }
                         catch (InvalidCastException e)
                         {
-                            #if(DEBUG)
+#if(DEBUG)
                             throw (e);
-                            #endif
+#endif
                         }
 
                         if (newValue != null)
@@ -599,11 +599,14 @@ namespace CADability.DXF
         {
             Spline spline = new Spline();
 
-            foreach (GeoPoint fitPoint in bspline.ThroughPoint)
+            if (bspline.ThroughPointCount > 0)
             {
-                spline.FitPoints.Add(new XYZ(fitPoint.x, fitPoint.y, fitPoint.z));
-            }
+                foreach (GeoPoint fitPoint in bspline.ThroughPoint)
+                {
+                    spline.FitPoints.Add(new XYZ(fitPoint.x, fitPoint.y, fitPoint.z));
+                }
 
+            }
             foreach (GeoPoint controlPoint in bspline.Poles)
             {
                 spline.ControlPoints.Add(new XYZ(controlPoint.x, controlPoint.y, controlPoint.z));
@@ -616,7 +619,7 @@ namespace CADability.DXF
 
             for (int i = 0; i < bspline.Knots.Length; i++)
             {
-                for (int j = 0; i < bspline.Multiplicities[i]; j++) spline.Knots.Add(bspline.Knots[i]);
+                for (int j = 0; j < bspline.Multiplicities[i]; j++) spline.Knots.Add(bspline.Knots[i]);
             }
 
             return spline;
@@ -825,7 +828,7 @@ namespace CADability.DXF
             }
             if (go is ILinePattern lp && lp.LinePattern != null)
             {
-                if (!createdLinePatterns.TryGetValue(lp.LinePattern, out LineType linetype))
+                if (!doc.LineTypes.TryGetValue(lp.LinePattern.Name, out LineType linetype))
                 {
                     linetype = new LineType(lp.LinePattern.Name);
                     if (lp.LinePattern.Pattern != null)
