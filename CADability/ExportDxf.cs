@@ -148,87 +148,145 @@ namespace CADability.DXF
 
             foreach (KeyValuePair<string, object> de in go.UserData)
             {
-                var exDataApp = new AppId("TestAppId");
-                var xDString = new ExtendedDataString("test");
-                var xDList = new List<ExtendedDataString>(){ xDString };
-                entity.ExtendedData.Add(exDataApp, xDList);
-                
-                // TODO: Do a deep dive into xData export.
                 if (de.Value is ExtendedEntityData xData)
                 {
-                    var exDataApp
-                    XData data = new XData(registry);
-                
-                    foreach (KeyValuePair<DxfCode, object> item in xData.Data)
+                    
+                    if (!doc.AppIds.TryGetValue(xData.ApplicationName, out AppId xDataApp))
                     {
-                        DxfCode code = item.Key;
-                        //XDataCode code = item.Key;
-                        object newValue = null;
-                        //Make the export more robust to wrong XDataCode entries.
-                        //Try to fit the data into an existing datatype. Otherwise ignore entry.
-                        // TODO: This looks wildly incomplete. Run through thorough tests
-                        switch (code)
+                        xDataApp = new AppId(xData.ApplicationName);
+                        doc.AppIds.Add(xDataApp);
+                    }
+                    var xDataRecords = new List<ExtendedDataRecord>();
+                    foreach (KeyValuePair<XDataCode, object> item in xData.Data)
+                    {
+                        // Convert from netDxf XDataCode enum to preserve backward compatibility
+                        DxfCode code = (DxfCode)item.Key;
+                        ExtendedDataRecord newValue = null;
+                        // TODO: Should we use explicit cast with try/catch or safe cast and return null?
+                        try
                         {
-                            case DxfCode.Int16:
-                                if (item.Value is short int16val_1)
-                                    newValue = int16val_1;
-                                else if (item.Value is int int32val_1 && int32val_1 >= Int16.MinValue && int32val_1 <= Int16.MaxValue)
-                                    newValue = Convert.ToInt16(int32val_1);
-                                else if (item.Value is long int64val_1 && int64val_1 >= Int16.MinValue && int64val_1 <= Int16.MaxValue)
-                                    newValue = Convert.ToInt16(int64val_1);
-                                break;
-                            case DxfCode.Int32:
-                                if (item.Value is short int16val_2)
-                                    newValue = Convert.ToInt32(int16val_2);
-                                else if (item.Value is int int32val_2)
-                                    newValue = int32val_2;
-                                else if (item.Value is long int64val_2 && int64val_2 >= Int32.MinValue && int64val_2 <= Int32.MaxValue)
-                                    newValue = Convert.ToInt32(int64val_2);
-                                break;
-                            default:
-                                newValue = item.Value;
-                                break;
+                            switch (code)
+                            {
+                                case DxfCode.ExtendedDataAsciiString:
+                                    newValue = new ExtendedDataString((string)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataControlString:
+                                    newValue = new ExtendedDataControlString((bool)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataLayerName:
+                                    newValue = new ExtendedDataLayer((ulong)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataBinaryChunk:
+                                    newValue = new ExtendedDataBinaryChunk((byte[])item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataHandle:
+                                    newValue = new ExtendedDataHandle((ulong)item.Value);
+                                    break;
+                                // xData coordinates are saved as individual axes but each takes a full XYZ
+                                // Setting unused axes to 0?
+                                case DxfCode.ExtendedDataXCoordinate:
+                                    newValue = new ExtendedDataCoordinate(new XYZ((double)item.Value, 0, 0));
+                                    break;
+                                case DxfCode.ExtendedDataYCoordinate:
+                                    newValue = new ExtendedDataCoordinate(new XYZ(0, (double)item.Value, 0));
+                                    break;
+                                case DxfCode.ExtendedDataZCoordinate:
+                                    newValue = new ExtendedDataCoordinate(new XYZ(0, 0, (double)item.Value));
+                                    break;
+                                case DxfCode.ExtendedDataWorldXCoordinate:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ((double)item.Value, 0, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldYCoordinate:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, (double)item.Value, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldZCoordinate:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, 0, (double)item.Value));
+                                    break;
+                                case DxfCode.ExtendedDataWorldXDisp:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ((double)item.Value, 0, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldYDisp:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, (double)item.Value, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldZDisp:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, 0, (double)item.Value));
+                                    break;
+                                case DxfCode.ExtendedDataWorldXDir:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ((double)item.Value, 0, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldYDir:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, (double)item.Value, 0));
+                                    break;
+                                case DxfCode.ExtendedDataWorldZDir:
+                                    newValue = new ExtendedDataWorldCoordinate(new XYZ(0, 0, (double)item.Value));
+                                    break;
+                                case DxfCode.ExtendedDataReal:
+                                    newValue = new ExtendedDataReal((double)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataDist:
+                                    newValue = new ExtendedDataDistance((double)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataScale:
+                                    newValue = new ExtendedDataScale((double)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataInteger16:
+                                    newValue = new ExtendedDataInteger16((short)item.Value);
+                                    break;
+                                case DxfCode.ExtendedDataInteger32:
+                                    newValue = new ExtendedDataInteger32((int)item.Value);
+                                    break;
+                                default:
+                                    // How gracefully should we fail on unknown DxfCodes?
+                                    #if(DEBUG)
+                                    throw (new Exception("Unknown DxfCode: " + code));
+                                    #endif
+                            }
                         }
-                        
+                        catch (InvalidCastException e)
+                        {
+                            #if(DEBUG)
+                            throw (e);
+                            #endif
+                        }
+
                         if (newValue != null)
                         {
-                            xData.Data.Add(code, newValue);
-                            data.Records.AddRange(new ExtendedDataRecord<>()[] {});
-                            XDataRecord record = new XDataRecord(code, newValue);
-                            data.XDataRecord.Add(record);
+                            xDataRecords.Add(newValue);
                         }
                     }
-                    if (data.XDataRecord.Count > 0)
-                        entity.XData.Add(data);
+                    entity.ExtendedData.Add(xDataApp, xDataRecords);
                 }
                 else
                 {
-                    ApplicationRegistry registry = new ApplicationRegistry(ApplicationRegistry.DefaultName);
-                    XData data = new XData(registry);
+                    var xDataApp = new AppId(de.Key);
+                    var xDataRecords = new List<ExtendedDataRecord>();
                 
-                    XDataRecord record = null;
+                    ExtendedDataRecord record = null;
                 
                     switch (de.Value)
                     {
                         case string strValue:
-                            record = new XDataRecord(XDataCode.String, strValue);
+                            record = new ExtendedDataString(strValue);
                             break;
                         case short shrValue:
-                            record = new XDataRecord(XDataCode.Int16, shrValue);
+                            record = new ExtendedDataInteger16(shrValue);
                             break;
                         case int intValue:
-                            record = new XDataRecord(XDataCode.Int32, intValue);
+                            record = new ExtendedDataInteger32(intValue);
                             break;
                         case double dblValue:
-                            record = new XDataRecord(XDataCode.Real, dblValue);
+                            record = new ExtendedDataReal(dblValue);
                             break;
                         case byte[] bytValue:
-                            record = new XDataRecord(XDataCode.BinaryData, bytValue);
+                            record = new ExtendedDataBinaryChunk(bytValue);
                             break;
                     }
-                
+
                     if (record != null)
-                        data.XDataRecord.Add(record);
+                    {
+                        xDataRecords.Add(record);
+                        entity.ExtendedData.Add(xDataApp, xDataRecords);
+                    }
                 }
             }
         }
@@ -405,6 +463,7 @@ namespace CADability.DXF
             string textValue = textGeoObj.TextString;
             // TODO: Use Text.FourPoints to use TextEntity.AlignmentPoint for rotation?
             FontFlags fontFlags = FontFlags.Regular;
+            if (textGeoObj.ColorDef == null) textGeoObj.ColorDef = new ColorDef();
             
             if (textGeoObj.Bold) fontFlags |= FontFlags.Bold;
             if (textGeoObj.Italic) fontFlags |= FontFlags.Italic;
@@ -574,7 +633,7 @@ namespace CADability.DXF
             Polyline3D polyline = new ACadSharp.Entities.Polyline3D();
             for (int i = 0; i < goPolyline.Vertices.Length; i++)
             {
-                Vertex2D vert = new ACadSharp.Entities.Vertex2D();
+                Vertex3D vert = new ACadSharp.Entities.Vertex3D();
                 vert.Location = new XYZ(goPolyline.Vertices[i].x, goPolyline.Vertices[i].y, goPolyline.Vertices[i].z);
                 polyline.Vertices.Add(vert);
             }
@@ -783,8 +842,8 @@ namespace CADability.DXF
                     // Not sure what fromName is
                     case ColorDef.ColorSource.fromName:
                     case ColorDef.ColorSource.fromObject:
-                        // Convert ARGB alpha channel to AutoCAD transparency
-                        entity.Transparency = new Transparency((byte)((short)((cd.ColorDef.Color.A / 255.0) * 90)));
+                        //Convert ARGB alpha channel to AutoCAD transparency
+                        entity.Transparency = new Transparency((byte)(90 - (short)(cd.ColorDef.Color.A / 255.0 * 90)));
                         if (cd.ColorDef.Color.ToArgb().Equals(Color.White.ToArgb()) || cd.ColorDef.Color.ToArgb().Equals(Color.Black.ToArgb()))
                         {
                             // White/black index

@@ -15,12 +15,12 @@ using System.Drawing;
 using System.Text;
 using System.IO;
 using System.Linq;
-using System.Numerics;
 using ACadSharp.Entities;
 using ACadSharp.Objects;
 using ACadSharp.Tables;
 using ACadSharp.XData;
 using CSMath;
+using netDxf;
 using Color = ACadSharp.Color;
 using Path = System.IO.Path;
 using Polyline2D = ACadSharp.Entities.Polyline2D;
@@ -80,13 +80,7 @@ namespace CADability.DXF
         }
         private void FillPaperSpace(Model model)
         {
-            // netDxf.Blocks.Block modelSpace = doc.Blocks["*Paper_Space"];
-            // foreach (EntityObject item in modelSpace.Entities)
-            // {
-            //     IGeoObject geoObject = GeoObjectFromEntity(item);
-            //     if (geoObject != null) model.Add(geoObject);
-            // }
-            
+            if (doc.PaperSpace == null) return;
             var entities = doc.PaperSpace.Entities;
             foreach (Entity entity in entities)
             {
@@ -370,16 +364,20 @@ namespace CADability.DXF
         }
         private void SetUserData(IGeoObject go, ACadSharp.Entities.Entity entity)
         {
+            // TODO: Match types in ACadSharp ExportDxf. Support coordinates properly.
             foreach (KeyValuePair<AppId, ExtendedData> item in entity.ExtendedData.Entries)
             {
                 ExtendedEntityData xdata = new ExtendedEntityData();
+                // Should we just set this with the key? Should be identical
                 xdata.ApplicationName = item.Value.AppId.Name;
-
-                string name = item.Value.AppId.Name + ":" + item.Key;
+                // Are we setting the name as the AppId twice here? Why?
+                string name = item.Value.AppId.Name + ":" + item.Key.Name;
 
                 foreach (ExtendedDataRecord record in item.Value.Records)
                 {
-                    xdata.Data.Add(new KeyValuePair<DxfCode, object>(record.Code, record.Value));
+                    // Convert to netDxf XDataCode enum type for backward compatibility
+                    XDataCode code = (XDataCode)record.Code;
+                    xdata.Data.Add(new KeyValuePair<XDataCode, object>(code, record.Value));
                 }
 
                 go.UserData.Add(name, xdata);
@@ -930,6 +928,11 @@ namespace CADability.DXF
             List<IGeoObject> path = new List<IGeoObject>();
             for (int i = 0; i < exploded.Count; i++)
             {
+                // TODO: Write CopyAttributes method so exploded polyline results will retain data
+                exploded[i].Layer = polyline.Layer;
+                exploded[i].Color = polyline.Color;
+                exploded[i].LineWeight = polyline.LineWeight;
+                exploded[i].LineType = polyline.LineType;
                 IGeoObject ent = GeoObjectFromEntity(exploded[i]);
                 if (ent != null) path.Add(ent);
             }
