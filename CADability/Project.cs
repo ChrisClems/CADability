@@ -11,7 +11,6 @@ using System.Diagnostics;
 using CADability.WebDrawing;
 using Point = CADability.WebDrawing.Point;
 #else
-using System.Drawing;
 using Point = System.Drawing.Point;
 #endif
 using System.Drawing.Printing;
@@ -21,6 +20,10 @@ using System.Reflection;
 using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
+using ACadSharp;
+using netDxf.Header;
+using Color = System.Drawing.Color;
+
 // using System.Runtime.Serialization.Formatters.Soap; Müsste man mal einführen, referenz muss verwendet werden
 
 
@@ -1193,7 +1196,7 @@ namespace CADability
         /// <param name="fileName">Path and filename for the generated output file</param>
         /// <param name="format">Format, one of the strings: dxf, dwg, iges, step, vrml, stl, sat, xt </param>
         /// <returns>true on success</returns>
-        public bool Export(string fileName, string format)
+        public bool Export(string fileName, string format, bool aCadSharp = false)
         {
             format = format.ToLower();
             switch (format)
@@ -1202,10 +1205,23 @@ namespace CADability
                 case "html":
                     return true;
                 case "dxf":
-                    CADability.DXF.Export export = new DXF.Export(netDxf.Header.DxfVersion.AutoCad2000);
-                    export.WriteToFile(this, fileName);
+                    if (aCadSharp)
+                    {
+                        CADability.DXF.Export2 export = new DXF.Export2(ACadVersion.AC1032);
+                        export.WriteToFile(this, fileName);
+                    }
+                    else
+                    {
+                        CADability.DXF.Export export = new DXF.Export(DxfVersion.AutoCad2000);
+                        export.WriteToFile(this, fileName);
+                    }
                     return true;
                 case "dwg":
+                    if (aCadSharp)
+                    {
+                        CADability.DXF.Export2 export = new DXF.Export2(ACadVersion.AC1032);
+                        export.WriteToFile(this, fileName);
+                    }
                     return true;
                 case "dxb":
                     return true;
