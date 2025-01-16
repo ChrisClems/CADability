@@ -21,7 +21,6 @@ using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
 using ACadSharp;
-using CADability.DXF;
 using netDxf.Header;
 using Color = System.Drawing.Color;
 
@@ -335,7 +334,7 @@ namespace CADability
 
             filterList = new FilterList(); // auch aus globale settings?
             filterList.AttributeListContainer = this;
-            base.resourceIdInternal = "ProjectSettings";
+            base.resourceId = "ProjectSettings";
 
             UserData = new UserData();
             UserData.UserDataAddedEvent += new UserData.UserDataAddedDelegate(OnUserDataAdded);
@@ -1802,23 +1801,19 @@ namespace CADability
                 }
             }
         }
-        private static Project ImportDxfOrDwg(string filename)
+        private static Project ImportDXF(string filename)
         {
-            bool useACadSharp = Settings.GlobalSettings.GetBoolValue("DxfImport.UseACadSharp", false);
-            var format = System.IO.Path.GetExtension(filename).ToLower();
-            if (format.Equals(".dxf") && !useACadSharp)
+            using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
             {
-                using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
-                {
-                    Import import = new Import(converted.DxfFileName);
-                    return import.Project;
-                }
+                CADability.DXF.Import import = new DXF.Import(converted.DxfFileName);
+                return import.Project;
             }
-            // Completely removing DWG netDxf import support
-            // Requires external third-party program to be installed
-            else
+        }
+        private static Project ImportDWG(string filename)
+        {
+            using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
             {
-                Import2 import = new Import2(filename);
+                CADability.DXF.Import import = new DXF.Import(converted.DxfFileName);
                 return import.Project;
             }
         }
@@ -1840,9 +1835,8 @@ namespace CADability
             switch (Format)
             {
                 case "cdb": return ReadFromFile(FileName, useProgress);
-                case "dxf": 
-                case "dwg": 
-                    return ImportDxfOrDwg(FileName);
+                case "dxf": return ImportDXF(FileName);
+                case "dwg": return ImportDWG(FileName);
                 case "step":
                 case "stp":
                     ImportStep importStep = new ImportStep();
@@ -2362,7 +2356,7 @@ namespace CADability
                 {
                 }
             }
-            base.resourceIdInternal = "ProjectSettings";
+            base.resourceId = "ProjectSettings";
         }
         void OnUserDataRemoved(string name, object value)
         {
@@ -2691,7 +2685,6 @@ namespace CADability
         #region IEnumerable
         public void Add(object toAdd)
         {
-            throw new NotImplementedException();
         }
         IEnumerator IEnumerable.GetEnumerator()
         {
