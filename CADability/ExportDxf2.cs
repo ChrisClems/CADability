@@ -19,14 +19,12 @@ namespace CADability.DXF
     public class Export2
     {
         private CadDocument doc;
-        private Dictionary<CADability.Attribute.Layer, Layer> createdLayers;
         Dictionary<LinePattern, LineType> createdLinePatterns;
         int anonymousBlockCounter;
         double triangulationPrecision = 0.1;
         public Export2(ACadVersion version)
         {
             doc = new CadDocument(version);
-            createdLayers = new Dictionary<Attribute.Layer, Layer>();
             createdLinePatterns = new Dictionary<LinePattern, LineType>();
         }
         // Can we export to bytes/steams in Acadsharp?
@@ -125,11 +123,11 @@ namespace CADability.DXF
                         entities[i].Layer = Layer.Default;
                         continue;
                     }
-                    if (!createdLayers.TryGetValue(geoObject.Layer, out Layer layer))
+                    if (!doc.Layers.TryGetValue(geoObject.Layer.Name, out Layer layer))
                     {
                         layer = new Layer(geoObject.Layer.Name);
                         doc.Layers.Add(layer);
-                        createdLayers[geoObject.Layer] = layer;
+                        //createdLayers[geoObject.Layer] = layer;
                     }
                     entities[i].Layer = layer;
                 }
@@ -546,7 +544,6 @@ namespace CADability.DXF
                 HorizontalAlignment = horizontalAignment,
                 Style = textStyleDxf,
             };
-            SetAttributes(textEnt, textGeoObj);
             return textEnt;
 
             // // Old code below. Preserved for troubleshooting positioning
@@ -817,12 +814,12 @@ namespace CADability.DXF
             }
             if (go.Layer != null)
             {
-                if (!createdLayers.TryGetValue(go.Layer, out Layer layer))
+                if (!doc.Layers.TryGetValue(go.Layer.Name, out Layer layer))
                 {
                     // TODO: Copy more layer data like color?
                     layer = new Layer(go.Layer.Name);
                     doc.Layers.Add(layer);
-                    createdLayers[go.Layer] = layer;
+                    //createdLayers[go.Layer] = layer;
                 }
                 entity.Layer = layer;
             }
