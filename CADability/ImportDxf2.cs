@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using ACadSharp;
 using CADability.GeoObject;
 using CADability.Shapes;
@@ -9,17 +10,21 @@ using CADability.Attribute;
 using CADability.WebDrawing;
 using Point = CADability.WebDrawing.Point;
 #else
+using System.Drawing;
 #endif
 using System.Text;
 using System.IO;
 using System.Linq;
 using ACadSharp.Entities;
+using ACadSharp.Objects;
 using ACadSharp.Tables;
 using ACadSharp.XData;
 using CSMath;
 using netDxf;
 using Color = ACadSharp.Color;
 using Path = System.IO.Path;
+using Polyline2D = ACadSharp.Entities.Polyline2D;
+using Solid = ACadSharp.Entities.Solid;
 
 namespace CADability.DXF
 {
@@ -31,9 +36,9 @@ namespace CADability.DXF
     [Obsolete("ACadSharp import is experimental.")]
     public class Import2
     {
-        private CadDocument doc;
+        private ACadSharp.CadDocument doc;
         private Project project;
-        private Dictionary<string, Block> blockTable;
+        private Dictionary<string, GeoObject.Block> blockTable;
         private Dictionary<ACadSharp.Tables.Layer, ColorDef> layerColorTable;
         private Dictionary<ACadSharp.Tables.Layer, Attribute.Layer> layerTable;
         /// <summary>
@@ -93,7 +98,7 @@ namespace CADability.DXF
         {
             if (doc == null) return null;
             project = Project.CreateSimpleProject();
-            blockTable = new Dictionary<string, Block>();
+            blockTable = new Dictionary<string, GeoObject.Block>();
             layerColorTable = new Dictionary<ACadSharp.Tables.Layer, ColorDef>();
             layerTable = new Dictionary<ACadSharp.Tables.Layer, Attribute.Layer>();
             foreach (var item in doc.Layers)
@@ -140,30 +145,30 @@ namespace CADability.DXF
             doc = null;
             return project;
         }
-        private IGeoObject GeoObjectFromEntity(Entity item)
+        private IGeoObject GeoObjectFromEntity(ACadSharp.Entities.Entity item)
         {
             IGeoObject res = null;
             switch (item)
             {
                 case ACadSharp.Entities.Line dxfLine: res = CreateLine(dxfLine); break;
-                case Ray dxfRay: res = CreateRay(dxfRay); break;
-                case Arc dxfArc: res = CreateArc(dxfArc); break;
-                case Circle dxfCircle: res = CreateCircle(dxfCircle); break;
+                case ACadSharp.Entities.Ray dxfRay: res = CreateRay(dxfRay); break;
+                case ACadSharp.Entities.Arc dxfArc: res = CreateArc(dxfArc); break;
+                case ACadSharp.Entities.Circle dxfCircle: res = CreateCircle(dxfCircle); break;
                 case ACadSharp.Entities.Ellipse dxfEllipse: res = CreateEllipse(dxfEllipse); break;
-                case Spline dxfSpline: res = CreateSpline(dxfSpline); break;
-                case Face3D dxfFace: res = CreateFace(dxfFace); break;
-                case PolyfaceMesh dxfPolyfaceMesh: res = CreatePolyfaceMesh(dxfPolyfaceMesh); break;
+                case ACadSharp.Entities.Spline dxfSpline: res = CreateSpline(dxfSpline); break;
+                case ACadSharp.Entities.Face3D dxfFace: res = CreateFace(dxfFace); break;
+                case ACadSharp.Entities.PolyfaceMesh dxfPolyfaceMesh: res = CreatePolyfaceMesh(dxfPolyfaceMesh); break;
                 case ACadSharp.Entities.Hatch dxfHatch: res = CreateHatch(dxfHatch); break;
                 case ACadSharp.Entities.Solid dxfSolid: res = CreateSolid(dxfSolid); break;
-                case Insert dxfInsert: res = CreateInsert(dxfInsert); break;
-                case MLine dxfMLine: res = CreateMLine(dxfMLine); break;
-                case TextEntity dxfText: res = CreateText(dxfText); break;
+                case ACadSharp.Entities.Insert dxfInsert: res = CreateInsert(dxfInsert); break;
+                case ACadSharp.Entities.MLine dxfMLine: res = CreateMLine(dxfMLine); break;
+                case ACadSharp.Entities.TextEntity dxfText: res = CreateText(dxfText); break;
                 case ACadSharp.Entities.Dimension dxfDimension: res = CreateDimension(dxfDimension); break;
-                case MText dxfMText: res = CreateMText(dxfMText); break;
-                case Leader dxfLeader: res = CreateLeader(dxfLeader); break;
+                case ACadSharp.Entities.MText dxfMText: res = CreateMText(dxfMText); break;
+                case ACadSharp.Entities.Leader dxfLeader: res = CreateLeader(dxfLeader); break;
                 case ACadSharp.Entities.Point dxfPoint: res = CreatePoint(dxfPoint); break;
-                case Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
-                case IPolyline polyline: res = CreateExplodedPolyline(polyline); break; // Does this import LwPolyline?
+                case ACadSharp.Entities.Mesh dxfMesh: res = CreateMesh(dxfMesh); break;
+                case ACadSharp.Entities.IPolyline polyline: res = CreateExplodedPolyline(polyline); break; // Does this import LwPolyline?
                 //case ACadSharp.Entities.LwPolyline lwPolyline: res = CreateExplodedPolyline(lwPolyline); break; // Is this needed?
                 // Polyline import as exploded geometry streamlined with CreateExplodedPolyline
                 // TODO: Revisit polyline importing for enhancements or potential polyline-to-polyline imports
@@ -171,7 +176,7 @@ namespace CADability.DXF
                 //case ACadSharp.Entities.Polyline3D dxfPolyline3D: res = CreatePolyline3D(dxfPolyline3D); break;
                         
                 default:
-                    System.Diagnostics.Trace.WriteLine("dxf: not imported: " + item);
+                    System.Diagnostics.Trace.WriteLine("dxf: not imported: " + item.ToString());
                     break;
             }
             if (res != null)
@@ -224,7 +229,7 @@ namespace CADability.DXF
             project.HatchStyleList.Add(nhss);
             return nhss;
         }
-        private HatchStyleLines FindOrCreateHatchStyleLines(Entity entity, double lineAngle, double lineDistance, double[] dashes)
+        private HatchStyleLines FindOrCreateHatchStyleLines(ACadSharp.Entities.Entity entity, double lineAngle, double lineDistance, double[] dashes)
         {
             var entColor = System.Drawing.Color.FromArgb(255, entity.Color.R, entity.Color.G, entity.Color.B);
             for (int i = 0; i < project.HatchStyleList.Count; i++)
@@ -263,11 +268,11 @@ namespace CADability.DXF
             project.HatchStyleList.Add(nhsl);
             return nhsl;
         }
-        private ColorDef FindOrCreateColor(Color color, ACadSharp.Tables.Layer layer)
+        private ColorDef FindOrCreateColor(ACadSharp.Color color, ACadSharp.Tables.Layer layer)
         {
             if (color.IsByLayer && layer != null)
             {
-                ColorDef res = layerColorTable[layer];
+                ColorDef res = layerColorTable[layer] as ColorDef;
                 if (res != null) return res;
             }
             Color rgb = new Color(color.R, color.G, color.B);
@@ -331,7 +336,7 @@ namespace CADability.DXF
             }
             return new LinePattern(NewName("DXFpattern", project.LinePatternList), dashes);
         }
-        private void SetAttributes(IGeoObject go, Entity entity)
+        private void SetAttributes(IGeoObject go, ACadSharp.Entities.Entity entity)
         {
             if (go is IColorDef cd) cd.ColorDef = FindOrCreateColor(entity.Color, entity.Layer);
             go.Layer = layerTable[entity.Layer];
@@ -358,7 +363,7 @@ namespace CADability.DXF
                 ld.LineWidth = project.LineWidthList.CreateOrFind("DXF_" + lw.ToString(), ((int)lw) / 100.0);
             }
         }
-        private void SetUserData(IGeoObject go, Entity entity)
+        private void SetUserData(IGeoObject go, ACadSharp.Entities.Entity entity)
         {
             // TODO: Match types in ACadSharp ExportDxf. Support coordinates properly.
             foreach (KeyValuePair<AppId, ExtendedData> item in entity.ExtendedData.Entries)
@@ -380,17 +385,17 @@ namespace CADability.DXF
             }
             go.UserData["DxfImport.Handle"] = new UserInterface.StringProperty(entity.Handle.ToString(), "DxfImport.Handle");
         }
-        private Block FindBlock(ACadSharp.Blocks.Block entity)
+        private GeoObject.Block FindBlock(ACadSharp.Blocks.Block entity)
         {
-            if (!blockTable.TryGetValue(entity.Handle.ToString(), out Block found))
+            if (!blockTable.TryGetValue(entity.Handle.ToString(), out GeoObject.Block found))
             {
-                found = Block.Construct();
+                found = GeoObject.Block.Construct();
                 found.Name = entity.Name;
                 found.RefPoint = new GeoPoint(entity.BasePoint.X, entity.BasePoint.Y, entity.BasePoint.Z);
                 List<CadObject> entities = entity.Reactors.Values.ToList();
                 foreach (CadObject obj in entities)
                 {
-                    if (obj is Entity e)
+                    if (obj is ACadSharp.Entities.Entity e)
                     {
                         IGeoObject go = GeoObjectFromEntity(e);
                         if (go != null) found.Add(go);
@@ -425,7 +430,7 @@ namespace CADability.DXF
                 return l;
             }
         }
-        private IGeoObject CreateRay(Ray ray)
+        private IGeoObject CreateRay(ACadSharp.Entities.Ray ray)
         {
             GeoObject.Line l = GeoObject.Line.Construct();
             XYZ sp = ray.StartPoint;
@@ -434,7 +439,7 @@ namespace CADability.DXF
             l.EndPoint = l.StartPoint + new GeoVector(dir.X, dir.Y, dir.Z);
             return l;
         }
-        private IGeoObject CreateArc(Arc arc)
+        private IGeoObject CreateArc(ACadSharp.Entities.Arc arc)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
             GeoVector nor = new GeoVector(arc.Normal.X, arc.Normal.Y, arc.Normal.Z);
@@ -466,7 +471,7 @@ namespace CADability.DXF
             return e;
         }
 
-        private IGeoObject CreateCircle(Circle circle)
+        private IGeoObject CreateCircle(ACadSharp.Entities.Circle circle)
         {
             GeoObject.Ellipse e = GeoObject.Ellipse.Construct();
             GeoPoint cnt = new GeoPoint(circle.Center.X, circle.Center.Y, circle.Center.Z);
@@ -513,7 +518,7 @@ namespace CADability.DXF
             return parameter;
         }
 
-        private IGeoObject CreateSpline(Spline spline)
+        private IGeoObject CreateSpline(ACadSharp.Entities.Spline spline)
         {
             int degree = spline.Degree;
             bool isClosed = spline.Flags.HasFlag(SplineFlags.Closed);
@@ -626,7 +631,7 @@ namespace CADability.DXF
             return null;
         }
 
-        private IGeoObject CreateFace(Face3D face)
+        private IGeoObject CreateFace(ACadSharp.Entities.Face3D face)
         {
             List<GeoPoint> points = new List<GeoPoint>();
             GeoPoint p = new GeoPoint(face.FirstCorner.X, face.FirstCorner.Y, face.FirstCorner.Z);
@@ -655,7 +660,7 @@ namespace CADability.DXF
                     {
                         Face fc1 = Face.MakeFace(points[0], points[1], points[2]);
                         Face fc2 = Face.MakeFace(points[0], points[2], points[3]);
-                        Block blk = Block.Construct();
+                        GeoObject.Block blk = GeoObject.Block.Construct();
                         blk.Set(new GeoObjectList(fc1, fc2));
                         return blk;
                     }
@@ -683,7 +688,7 @@ namespace CADability.DXF
             return null;
 
         }
-        private IGeoObject CreatePolyfaceMesh(PolyfaceMesh polyfacemesh)
+        private IGeoObject CreatePolyfaceMesh(ACadSharp.Entities.PolyfaceMesh polyfacemesh)
         {
             Entity[] exploded = polyfacemesh.Explode().ToArray();
 
@@ -838,7 +843,7 @@ namespace CADability.DXF
                     }
                     if (list.Count > 1)
                     {
-                        Block block = Block.Construct();
+                        GeoObject.Block block = GeoObject.Block.Construct();
                         block.Set(new GeoObjectList(list));
                         return block;
                     }
@@ -901,10 +906,10 @@ namespace CADability.DXF
             hatch.Plane = pln;
             return hatch;
         }
-        private IGeoObject CreateInsert(Insert insert)
+        private IGeoObject CreateInsert(ACadSharp.Entities.Insert insert)
         {
             // could also use insert.Explode()
-            Block block = FindBlock(insert.Block.BlockEntity);
+            GeoObject.Block block = FindBlock(insert.Block.BlockEntity);
             if (block != null)
             {
                 IGeoObject res = block.Clone();
@@ -918,7 +923,7 @@ namespace CADability.DXF
             }
             return null;
         }
-        private IGeoObject CreateExplodedPolyline(IPolyline polyline)
+        private IGeoObject CreateExplodedPolyline(ACadSharp.Entities.IPolyline polyline)
         {
             List<Entity> exploded = polyline.Explode().ToList();
             List<IGeoObject> path = new List<IGeoObject>();
@@ -937,7 +942,7 @@ namespace CADability.DXF
             if (go.CurveCount > 0) return go;
             return null;
         }
-        private IGeoObject CreateMLine(MLine mLine)
+        private IGeoObject CreateMLine(ACadSharp.Entities.MLine mLine)
         {
             List<CadObject> exploded = mLine.Reactors.Values.ToList();
             List<IGeoObject> path = new List<IGeoObject>();
@@ -965,7 +970,7 @@ namespace CADability.DXF
             }
             if (res.Count > 1)
             {
-                Block blk = Block.Construct();
+                GeoObject.Block blk = GeoObject.Block.Construct();
                 blk.Name = "MLINE " + mLine.Handle;
                 blk.Set(res);
                 return blk;
@@ -976,9 +981,8 @@ namespace CADability.DXF
              
             return null;
         }
-        private static string ProcessAcadString(string acstr)
+        private string processAcadString(string acstr)
         {
-            // TODO: Update with more codes
             StringBuilder sb = new StringBuilder(acstr);
             sb.Replace("%%153", "Ø");
             sb.Replace("%%127", "°");
@@ -999,10 +1003,10 @@ namespace CADability.DXF
             // and maybe some more, is there a documentation?
             return sb.ToString();
         }
-        private IGeoObject CreateText(TextEntity txt)
+        private IGeoObject CreateText(ACadSharp.Entities.TextEntity txt)
         {
-            Text text = Text.Construct();
-            string txtstring = ProcessAcadString(txt.Value);
+            Text text = GeoObject.Text.Construct();
+            string txtstring = processAcadString(txt.Value);
             if (txtstring.Trim().Length == 0) return null;
             string filename;
             string name;
@@ -1019,7 +1023,8 @@ namespace CADability.DXF
             Angle a = Angle.Deg(txt.Rotation);
             double h = txt.Height;
             Plane plane = new Plane(insertionPoint, normal);
-            
+
+            bool isShx = false;
             if (typeface.Length > 0)
             {
                 text.Font = typeface;
@@ -1029,6 +1034,7 @@ namespace CADability.DXF
                 if (Path.GetExtension(filename).ToLower() == ".shx")
                 {
                     filename = Path.GetFileNameWithoutExtension(filename);
+                    isShx = true;
                 }
                 if (Path.GetExtension(filename).ToLower() == ".ttf")
                 {
@@ -1109,7 +1115,7 @@ namespace CADability.DXF
             // but then we would need a "CustomBlock" flag in the CADability Dimension object and also save this Block
             if (dimension.Block != null)
             {
-                Block block = FindBlock(dimension.Block.BlockEntity);
+                GeoObject.Block block = FindBlock(dimension.Block.BlockEntity);
                 if (block != null)
                 {
                     IGeoObject res = block.Clone();
@@ -1122,10 +1128,10 @@ namespace CADability.DXF
             }
             return null;
         }
-        private IGeoObject CreateMText(MText mText)
+        private IGeoObject CreateMText(ACadSharp.Entities.MText mText)
         {
             // TODO: Support importing real MText either through stacking single text GeoObjects or adding multi-line support to CADAbility
-            TextEntity txt = new TextEntity()
+            ACadSharp.Entities.TextEntity txt = new ACadSharp.Entities.TextEntity()
             {
                 Value = mText.Value.Replace(@"\P", " "),
                 Height = mText.Height,
@@ -1142,11 +1148,11 @@ namespace CADability.DXF
             };
             return CreateText(txt);
         }
-        private IGeoObject CreateLeader(Leader leader)
+        private IGeoObject CreateLeader(ACadSharp.Entities.Leader leader)
         {
             GeoPoint[] leaderVertices = leader.Vertices.ToArray().Select(vert => new GeoPoint(vert.X, vert.Y, vert.Z)).ToArray();
             Plane ocs = CADability.Plane.FromPoints(leaderVertices, out _, out _);
-            Block blk = Block.Construct();
+            GeoObject.Block blk = GeoObject.Block.Construct();
             blk.Name = "Leader:" + leader.Handle;
             if (leader.CreationType != LeaderCreationType.CreatedWithoutAnnotation)
             {
@@ -1213,12 +1219,12 @@ namespace CADability.DXF
         // }
         private IGeoObject CreatePoint(ACadSharp.Entities.Point point)
         {
-            GeoObject.Point p = GeoObject.Point.Construct();
+            CADability.GeoObject.Point p = CADability.GeoObject.Point.Construct();
             p.Location = new GeoPoint(point.Location.X, point.Location.Y, point.Location.Z);
             p.Symbol = PointSymbol.Cross;
             return p;
         }
-        private IGeoObject CreateMesh(Mesh mesh)
+        private IGeoObject CreateMesh(ACadSharp.Entities.Mesh mesh)
         {
             GeoPoint[] vertices = new GeoPoint[mesh.Vertices.Count];
             for (int i = 0; i < vertices.Length; i++)
@@ -1242,10 +1248,7 @@ namespace CADability.DXF
                             Face fc = Face.MakeFace(surf, ss);
                             faces.Add(fc);
                         }
-                        catch
-                        {
-                            // ignored. Why is this here? If there's an expected exception it should be explicitly caught.
-                        }
+                        catch { };
                     }
                 }
                 else
@@ -1256,19 +1259,12 @@ namespace CADability.DXF
                         {
                             Plane pln = new Plane(vertices[indices[0]], vertices[indices[1]], vertices[indices[2]]);
                             PlaneSurface surf = new PlaneSurface(pln);
-                            Border bdr = new Border(new GeoPoint2D[]
-                            {
-                                new GeoPoint2D(0.0, 0.0), pln.Project(vertices[indices[1]]),
-                                pln.Project(vertices[indices[2]])
-                            });
+                            Border bdr = new Border(new GeoPoint2D[] { new GeoPoint2D(0.0, 0.0), pln.Project(vertices[indices[1]]), pln.Project(vertices[indices[2]]) });
                             SimpleShape ss = new SimpleShape(bdr);
                             Face fc = Face.MakeFace(surf, ss);
                             faces.Add(fc);
                         }
-                        catch
-                        {
-                            // ignored. Why is this here? If there's an expected exception it should be explicitly caught.
-                        }
+                        catch { };
                     }
                     if (indices[2] != indices[3] && indices[3] != indices[0])
                     {
@@ -1276,19 +1272,12 @@ namespace CADability.DXF
                         {
                             Plane pln = new Plane(vertices[indices[2]], vertices[indices[3]], vertices[indices[0]]);
                             PlaneSurface surf = new PlaneSurface(pln);
-                            Border bdr = new Border(new GeoPoint2D[]
-                            {
-                                new GeoPoint2D(0.0, 0.0), pln.Project(vertices[indices[3]]),
-                                pln.Project(vertices[indices[0]])
-                            });
+                            Border bdr = new Border(new GeoPoint2D[] { new GeoPoint2D(0.0, 0.0), pln.Project(vertices[indices[3]]), pln.Project(vertices[indices[0]]) });
                             SimpleShape ss = new SimpleShape(bdr);
                             Face fc = Face.MakeFace(surf, ss);
                             faces.Add(fc);
                         }
-                        catch
-                        {
-                            // ignored. Why is this here? If there's an expected exception it should be explicitly caught.
-                        }
+                        catch { };
                     }
                 }
             }
@@ -1298,7 +1287,7 @@ namespace CADability.DXF
                 if (sewed.Count == 1) return sewed[0];
                 else
                 {
-                    Block blk = Block.Construct();
+                    GeoObject.Block blk = GeoObject.Block.Construct();
                     blk.Name = "Mesh";
                     blk.Set(new GeoObjectList(faces as ICollection<IGeoObject>));
                     return blk;
