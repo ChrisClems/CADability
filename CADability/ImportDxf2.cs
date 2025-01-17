@@ -568,12 +568,12 @@ namespace CADability.DXF
                     List<int> splitKnots = new List<int>();
                     for (int i = degree + 1; i < kn.Length - degree - 1; i++)
                     {
-                        if (Math.Abs(kn[i] - kn[i - 1]) < Precision.eps)
+                        if (kn[i] == kn[i - 1])
                         {
                             bool sameKnot = true;
                             for (int j = 0; j < degree; j++)
                             {
-                                if (Math.Abs(kn[i - 1] - kn[i + j]) > Precision.eps) sameKnot = false;
+                                if (kn[i - 1] == kn[i + j]) sameKnot = false;
                             }
                             if (sameKnot) splitKnots.Add(i - 1);
                         }
