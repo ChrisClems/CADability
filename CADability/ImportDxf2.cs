@@ -486,17 +486,18 @@ namespace CADability.DXF
             GeoPoint cnt = new GeoPoint(ellipse.Center.X, ellipse.Center.Y, ellipse.Center.Z);
             GeoVector nor = new GeoVector(ellipse.Normal.X, ellipse.Normal.Y, ellipse.Normal.Z);
             Plane plane = new Plane(cnt, nor);
+
             ModOp2D rot = ModOp2D.Rotate(ellipse.Rotation);
             GeoVector2D majorAxis = 0.5 * ellipse.MajorAxis * (rot * GeoVector2D.XAxis);
             GeoVector2D minorAxis = 0.5 * ellipse.MinorAxis * (rot * GeoVector2D.YAxis);
             e.SetEllipseCenterAxis(cnt, plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
-
+            
             XY startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartParameter);
             double sp = CalcStartEndParameter(startPoint, ellipse.MajorAxis, ellipse.MinorAxis);
-
+            
             XY endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndParameter);
             double ep = CalcStartEndParameter(endPoint, ellipse.MajorAxis, ellipse.MinorAxis);
-
+            
             e.StartParameter = sp;
             e.SweepParameter = ep - sp;
             if (e.SweepParameter == 0.0) e.SweepParameter = Math.PI * 2.0;
