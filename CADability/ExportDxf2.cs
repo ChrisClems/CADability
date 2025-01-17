@@ -661,10 +661,9 @@ namespace CADability.DXF
             if (elli.IsArc)
             {
                 Plane dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
+                // TODO: Test removing this and inverting negative start/eng angle params below
+                // This will correct clockwise arcs exporting backwards or with an inverted Z normal
                 if (!elli.CounterClockWise) (elli.StartPoint, elli.EndPoint) = (elli.EndPoint, elli.StartPoint);
-                // Plane dxfPlane;
-                // if (elli.CounterClockWise) dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
-                // else dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(-elli.Plane.Normal));
                 if (elli.IsCircle)
                 {
                     GeoObject.Ellipse aligned = GeoObject.Ellipse.Construct();
@@ -684,8 +683,8 @@ namespace CADability.DXF
                     {
                         entity = new Arc
                         {
-                            Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
-                            Center = new XYZ(aligned.Center.x, aligned.Center.y, aligned.Center.z),
+                            Normal = new XYZ(dxfPlane.Normal),
+                            Center = new XYZ(aligned.Center),
                             Radius = aligned.Radius,
                             StartAngle = aligned.StartParameter, // Radians
                             EndAngle = aligned.StartParameter + aligned.SweepParameter, // Radians
@@ -696,36 +695,17 @@ namespace CADability.DXF
                 {
                     ACadSharp.Entities.Ellipse expelli = new ACadSharp.Entities.Ellipse()
                     {
-                        Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
+                        Normal = new XYZ(elli.Plane.Normal),
                         Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
-                        RadiusRatio = elli.MajorRadius / elli.MinorRadius,
+                        RadiusRatio = elli.MinorRadius / elli.MajorRadius,
                         StartParameter = elli.StartParameter,
-                        EndParameter = elli.SweepParameter,
-                        EndPoint = new XYZ(elli.EndPoint.x, elli.EndPoint.y, elli.EndPoint.z),
+                        EndParameter = elli.SweepParameter + elli.StartParameter,
+                        EndPoint = new XYZ(elli.MajorAxis.x, elli.MajorAxis.y, elli.MajorAxis.z),
                     };
+                    // DXF does not support negative params. We must convert to positive angles on the same vector.
+                    if (expelli.StartParameter < 0) expelli.StartParameter += 2 * Math.PI;
+                    if (expelli.EndParameter < 0) expelli.EndParameter += 2 * Math.PI;
                     entity = expelli;
-                    // TODO: Is any of this necessary? Acadsharp Ellipse constructor is fully set
-                    // Plane cdbplane = elli.Plane;
-                    // GeoVector2D dir = dxfPlane.Project(cdbplane.DirectionX);
-                    // SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
-                    // if (elli.SweepParameter < 0)
-                    // {   // there are no clockwise oriented ellipse arcs in dxf
-                    //     expelli.Rotation = -rot.Degree;
-                    //
-                    //     double startParameter = elli.StartParameter + elli.SweepParameter + Math.PI;
-                    //     expelli.StartAngle = CalcStartEndAngle(startParameter, expelli.MajorAxis, expelli.MinorAxis);
-                    //
-                    //     double endParameter = elli.StartParameter + Math.PI;
-                    //     expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
-                    // }
-                    // else
-                    // {
-                    //     expelli.Rotation = rot.Degree;
-                    //     expelli.StartAngle = CalcStartEndAngle(elli.StartParameter, expelli.MajorAxis, expelli.MinorAxis);
-                    //
-                    //     double endParameter = elli.StartParameter + elli.SweepParameter;
-                    //     expelli.EndAngle = CalcStartEndAngle(endParameter, expelli.MajorAxis, expelli.MinorAxis);
-                    // }
                 }
             }
             else
@@ -745,19 +725,13 @@ namespace CADability.DXF
                     {
                         Normal = new XYZ(elli.Plane.Normal.x, elli.Plane.Normal.y, elli.Plane.Normal.z),
                         Center = new XYZ(elli.Center.x, elli.Center.y, elli.Center.z),
-                        RadiusRatio = elli.MajorRadius / elli.MinorRadius,
+                        RadiusRatio = elli.MinorRadius / elli.MajorRadius,
                         StartParameter = elli.StartParameter,
-                        EndParameter = elli.SweepParameter,
-                        EndPoint = new XYZ(elli.EndPoint.x, elli.EndPoint.y, elli.EndPoint.z),
+                        EndParameter = elli.SweepParameter + elli.StartParameter,
+                        EndPoint = new XYZ(elli.MajorAxis.x, elli.MajorAxis.y, elli.MajorAxis.z),
                     };
                     
                     entity = expelli;
-                    // TODO: Is any of this necessary?
-                    // Plane dxfplane = Import2.Plane(Vector3(expelli.Center) ,Vector3(expelli.Normal)); // this plane is not correct, it has to be rotated
-                    // Plane cdbplane = elli.Plane;
-                    // GeoVector2D dir = dxfplane.Project(cdbplane.DirectionX);
-                    // SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
-                    // expelli.Rotation = rot.Degree;
                 }
             }
             return entity;
