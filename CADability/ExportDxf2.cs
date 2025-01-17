@@ -702,9 +702,13 @@ namespace CADability.DXF
                         EndParameter = elli.SweepParameter + elli.StartParameter,
                         EndPoint = new XYZ(elli.MajorAxis.x, elli.MajorAxis.y, elli.MajorAxis.z),
                     };
-                    // DXF does not support negative params. We must convert to positive angles on the same vector.
-                    if (expelli.StartParameter < 0) expelli.StartParameter += 2 * Math.PI;
-                    if (expelli.EndParameter < 0) expelli.EndParameter += 2 * Math.PI;
+                    // We cannot have mismatched signs on start and end params since DXF has no concept of CW/CCW
+                    // Find arcs with mismatched signs and flip the negative value to a positive on the same vector
+                    if (Math.Sign(expelli.StartParameter) != Math.Sign(expelli.EndParameter))
+                    {
+                        if (expelli.StartParameter < 0) expelli.StartParameter += 2 * Math.PI;
+                        if (expelli.EndParameter < 0) expelli.EndParameter += 2 * Math.PI;
+                    }
                     entity = expelli;
                 }
             }
