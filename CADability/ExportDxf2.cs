@@ -660,11 +660,11 @@ namespace CADability.DXF
             Entity entity;
             if (elli.IsArc)
             {
-                Plane dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(new GeoPoint(elli.Plane.Normal.x, elli.Plane.Normal.y, elli.Plane.Normal.z)));
+                Plane dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
                 if (!elli.CounterClockWise) (elli.StartPoint, elli.EndPoint) = (elli.EndPoint, elli.StartPoint);
                 // Plane dxfPlane;
-                // if (elli.CounterClockWise) dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
-                // else dxfPlane = Import.Plane(Vector3(elli.Center), Vector3(-elli.Plane.Normal));
+                // if (elli.CounterClockWise) dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
+                // else dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(-elli.Plane.Normal));
                 if (elli.IsCircle)
                 {
                     GeoObject.Ellipse aligned = GeoObject.Ellipse.Construct();
@@ -687,8 +687,8 @@ namespace CADability.DXF
                             Normal = new XYZ(dxfPlane.Normal.x, dxfPlane.Normal.y, dxfPlane.Normal.z),
                             Center = new XYZ(aligned.Center.x, aligned.Center.y, aligned.Center.z),
                             Radius = aligned.Radius,
-                            StartAngle = aligned.StartParameter / Math.PI * 180,
-                            EndAngle = (aligned.StartParameter + aligned.SweepParameter) / Math.PI * 180,
+                            StartAngle = aligned.StartParameter, // Radians
+                            EndAngle = aligned.StartParameter + aligned.SweepParameter, // Radians
                         };
                     }
                 }
@@ -753,7 +753,7 @@ namespace CADability.DXF
                     
                     entity = expelli;
                     // TODO: Is any of this necessary?
-                    // Plane dxfplane = Import.Plane(expelli.Center, expelli.Normal); // this plane is not correct, it has to be rotated
+                    // Plane dxfplane = Import2.Plane(Vector3(expelli.Center) ,Vector3(expelli.Normal)); // this plane is not correct, it has to be rotated
                     // Plane cdbplane = elli.Plane;
                     // GeoVector2D dir = dxfplane.Project(cdbplane.DirectionX);
                     // SweepAngle rot = new SweepAngle(GeoVector2D.XAxis, dir);
@@ -862,9 +862,27 @@ namespace CADability.DXF
                 entity.LineWeight = found;
             }
         }
+        
+        private double CalcStartEndAngle(double startEndParameter, double majorAxis, double minorAxis)
+        {
+            double a = majorAxis * 0.5d;
+            double b = minorAxis * 0.5d;
+            Vector2 startPoint = new Vector2(a * Math.Cos(startEndParameter), b * Math.Sin(startEndParameter));
+            return Vector2.Angle(startPoint) * netDxf.MathHelper.RadToDeg;
+        }
         private Vector3 Vector3(GeoPoint p)
         {
             return new Vector3(p.x, p.y, p.z);
+        }
+
+        private Vector3 Vector3(GeoVector p)
+        {
+            return new Vector3(p.x, p.y, p.z);
+        }
+
+        private Vector3 Vector3(XYZ p)
+        {
+            return new Vector3(p.X, p.Y, p.Z);
         }
         private string GetNextAnonymousBlockName()
         {
