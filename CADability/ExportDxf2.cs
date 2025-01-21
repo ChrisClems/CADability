@@ -621,6 +621,8 @@ namespace CADability.DXF
             {
                 for (int j = 0; j < bspline.Multiplicities[i]; j++) spline.Knots.Add(bspline.Knots[i]);
             }
+            
+            spline.Degree = bspline.Degree;
 
             return spline;
         }
