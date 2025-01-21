@@ -492,14 +492,17 @@ namespace CADability.DXF
             GeoVector2D minorAxis = 0.5 * ellipse.MinorAxis * (rot * GeoVector2D.YAxis);
             e.SetEllipseCenterAxis(cnt, plane.ToGlobal(majorAxis), plane.ToGlobal(minorAxis));
             
-            XY startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartParameter);
-            double sp = CalcStartEndParameter(startPoint, ellipse.MajorAxis, ellipse.MinorAxis);
+            // No longer necessary. DXF elliptical arcs expose the params directly. netDxf obscured them behind angles.
+            // XY startPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.StartParameter);
+            // double sp = CalcStartEndParameter(startPoint, ellipse.MajorAxis, ellipse.MinorAxis);
+            //
+            // XY endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndParameter);
+            // double ep = CalcStartEndParameter(endPoint, ellipse.MajorAxis, ellipse.MinorAxis);
             
-            XY endPoint = ellipse.PolarCoordinateRelativeToCenter(ellipse.EndParameter);
-            double ep = CalcStartEndParameter(endPoint, ellipse.MajorAxis, ellipse.MinorAxis);
-            
-            e.StartParameter = sp;
-            e.SweepParameter = ep - sp;
+            // e.StartParameter = sp;
+            // e.SweepParameter = ep - sp;
+            e.StartParameter = ellipse.StartParameter;
+            e.SweepParameter = ellipse.EndParameter - ellipse.StartParameter;
             if (e.SweepParameter == 0.0) e.SweepParameter = Math.PI * 2.0;
             if (e.SweepParameter < 0.0) e.SweepParameter += Math.PI * 2.0; // seems it is always counterclockwise
             // it looks like clockwise 2d ellipses are defined with normal vector (0, 0, -1)
