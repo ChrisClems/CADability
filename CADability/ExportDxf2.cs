@@ -663,9 +663,14 @@ namespace CADability.DXF
             if (elli.IsArc)
             {
                 Plane dxfPlane = Import2.Plane(Vector3(elli.Center), Vector3(elli.Plane.Normal));
-                // TODO: Test removing this and inverting negative start/eng angle params below
-                // This will correct clockwise arcs exporting backwards or with an inverted Z normal
+                // We need to correct for counterlockwise arcs and mixing of negative and positive start and sweep params
+                // Negative and positive param mixing will create arcs that have more than 360 degree total rotations
                 if (!elli.CounterClockWise) (elli.StartPoint, elli.EndPoint) = (elli.EndPoint, elli.StartPoint);
+                if (Math.Sign(elli.StartParameter) != Math.Sign(elli.SweepParameter))
+                {
+                    if (elli.StartParameter < 0) elli.StartParameter += 2 * Math.PI;
+                    if (elli.SweepParameter < 0) elli.SweepParameter += 2 * Math.PI;
+                }
                 if (elli.IsCircle)
                 {
                     GeoObject.Ellipse aligned = GeoObject.Ellipse.Construct();
@@ -704,13 +709,6 @@ namespace CADability.DXF
                         EndParameter = elli.SweepParameter + elli.StartParameter,
                         EndPoint = new XYZ(elli.MajorAxis.x, elli.MajorAxis.y, elli.MajorAxis.z),
                     };
-                    // We cannot have mismatched signs on start and end params since DXF has no concept of CW/CCW
-                    // Find arcs with mismatched signs and flip the negative value to a positive on the same vector
-                    if (Math.Sign(expelli.StartParameter) != Math.Sign(expelli.EndParameter))
-                    {
-                        if (expelli.StartParameter < 0) expelli.StartParameter += 2 * Math.PI;
-                        if (expelli.EndParameter < 0) expelli.EndParameter += 2 * Math.PI;
-                    }
                     entity = expelli;
                 }
             }
