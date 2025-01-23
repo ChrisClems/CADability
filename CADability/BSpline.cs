@@ -3025,89 +3025,94 @@ namespace CADability.GeoObject
             if (poles == null || poles.Length == 0) return null;
             GeoPoint2D[] poles2d = new GeoPoint2D[poles.Length];
             for (int i = 0; i < poles.Length; ++i) poles2d[i] = p.Project(poles[i]);
-            // gehe hier zunächst mal davon aus, dass der 2d BSpline mit den selben Parametern
-            // gemacht wird wie der 3d BSpline, lediglich die Punkte werden in die Ebene projiziert.
-            // Stimmt das?
-            // Ja, das scheint zu stimmen, steht jedenfalls so im NURBS Buch für affine Transformationen
-            // zumindest, wenn keine identischen poles entstehen. Dann benimmt sich der 2d BSpline nämlich blöde, DirectionAt kann 0 werden
-            bool identicalPoles = false;
-            for (int i = 0; i < poles.Length - 1; i++)
-            {
-                if (Precision.IsEqual(poles2d[i], poles2d[i + 1]))
-                {
-                    identicalPoles = true;
-                    break;
-                }
-            }
-            if (!identicalPoles)
-            {
-                BSpline2D bsp2d = new BSpline2D(poles2d, weights, knots, multiplicities, degree, false, startParam, endParam);
-                // closed auf false gesetzt, damit nicht initperiodic drankommt
-                bsp2d.SetZValues(this, p); // sollte vielleicht in das IVisibleSegments Interface um dort die Werte zu setzen
-                return bsp2d;
-            }
-            else
-            {
-                List<GeoPoint2D> throughPoints2d = new List<GeoPoint2D>();
-                if (ThroughPoints3dExist)
-                {
-                    for (int i = 0; i < throughPoints3d.Length; i++)
-                    {
-                        GeoPoint2D p2d = p.Project(poles[i]);
-                        if (throughPoints2d.Count > 0)
-                        {
-                            if (!Precision.IsEqual(throughPoints2d[throughPoints2d.Count - 1], p2d)) throughPoints2d.Add(p2d);
-                        }
-                        else
-                        {
-                            throughPoints2d.Add(p2d);
-                        }
-                    }
-                }
-                else
-                {
-                    double[] spos = (this as ICurve).GetSavePositions();
-                    for (int i = 0; i < spos.Length; i++)
-                    {
-                        GeoPoint2D p2d = p.Project((this as ICurve).PointAt(spos[i]));
-                        if (throughPoints2d.Count > 0)
-                        {
-                            if (!Precision.IsEqual(throughPoints2d[throughPoints2d.Count - 1], p2d)) throughPoints2d.Add(p2d);
-                        }
-                        else
-                        {
-                            throughPoints2d.Add(p2d);
-                        }
-                    }
-                    if (throughPoints2d.Count < 2)
-                    {
-                        return new Line2D(p.Project((this as ICurve).StartPoint), p.Project((this as ICurve).EndPoint));
-
-                        //Unreachable code
-                        /*
-                        return null;
-                        double prec = this.GetExtent(Precision.eps).Size * 1e-4;
-                        ICurve approx = (this as ICurve).Approximate(false, prec);
-                        ICurve2D res = approx.GetProjectedCurve(p);
-                        if (res is Path2D)
-                        {
-                            Path2D p2d = res as Path2D;
-                            p2d.Reduce(prec);   // vereinfacht den Pfad selbst, also res
-                            if (p2d.SubCurvesCount == 1) return p2d.SubCurves[0];
-                        }
-                        return res;*/
-                    }
-                }
-                try
-                {
-                    BSpline2D bsp2d = new BSpline2D(throughPoints2d.ToArray(), degree, this.periodic);
-                    return bsp2d;
-                }
-                catch
-                {
-                    return null; // kommt vor, wenn nicht genügend poles gefunden werden
-                }
-            }
+            BSpline2D bsp2d = new BSpline2D(poles2d, weights, knots, multiplicities, degree, false, startParam, endParam);
+            // closed auf false gesetzt, damit nicht initperiodic drankommt
+            bsp2d.SetZValues(this, p); // sollte vielleicht in das IVisibleSegments Interface um dort die Werte zu setzen
+            return bsp2d;
+            // TODO: Are there any 3D splines which can trigger an issue the below identicalPoles check was designed to avoid?
+            // // gehe hier zunächst mal davon aus, dass der 2d BSpline mit den selben Parametern
+            // // gemacht wird wie der 3d BSpline, lediglich die Punkte werden in die Ebene projiziert.
+            // // Stimmt das?
+            // // Ja, das scheint zu stimmen, steht jedenfalls so im NURBS Buch für affine Transformationen
+            // // zumindest, wenn keine identischen poles entstehen. Dann benimmt sich der 2d BSpline nämlich blöde, DirectionAt kann 0 werden
+            // bool identicalPoles = false;
+            // for (int i = 0; i < poles.Length - 1; i++)
+            // {
+            //     if (Precision.IsEqual(poles2d[i], poles2d[i + 1]))
+            //     {
+            //         identicalPoles = true;
+            //         break;
+            //     }
+            // }
+            // if (!identicalPoles)
+            // {
+            //     BSpline2D bsp2d = new BSpline2D(poles2d, weights, knots, multiplicities, degree, false, startParam, endParam);
+            //     // closed auf false gesetzt, damit nicht initperiodic drankommt
+            //     bsp2d.SetZValues(this, p); // sollte vielleicht in das IVisibleSegments Interface um dort die Werte zu setzen
+            //     return bsp2d;
+            // }
+            // else
+            // {
+            //     List<GeoPoint2D> throughPoints2d = new List<GeoPoint2D>();
+            //     if (ThroughPoints3dExist)
+            //     {
+            //         for (int i = 0; i < throughPoints3d.Length; i++)
+            //         {
+            //             GeoPoint2D p2d = p.Project(poles[i]);
+            //             if (throughPoints2d.Count > 0)
+            //             {
+            //                 if (!Precision.IsEqual(throughPoints2d[throughPoints2d.Count - 1], p2d)) throughPoints2d.Add(p2d);
+            //             }
+            //             else
+            //             {
+            //                 throughPoints2d.Add(p2d);
+            //             }
+            //         }
+            //     }
+            //     else
+            //     {
+            //         double[] spos = (this as ICurve).GetSavePositions();
+            //         for (int i = 0; i < spos.Length; i++)
+            //         {
+            //             GeoPoint2D p2d = p.Project((this as ICurve).PointAt(spos[i]));
+            //             if (throughPoints2d.Count > 0)
+            //             {
+            //                 if (!Precision.IsEqual(throughPoints2d[throughPoints2d.Count - 1], p2d)) throughPoints2d.Add(p2d);
+            //             }
+            //             else
+            //             {
+            //                 throughPoints2d.Add(p2d);
+            //             }
+            //         }
+            //         if (throughPoints2d.Count < 2)
+            //         {
+            //             return new Line2D(p.Project((this as ICurve).StartPoint), p.Project((this as ICurve).EndPoint));
+            //
+            //             //Unreachable code
+            //             /*
+            //             return null;
+            //             double prec = this.GetExtent(Precision.eps).Size * 1e-4;
+            //             ICurve approx = (this as ICurve).Approximate(false, prec);
+            //             ICurve2D res = approx.GetProjectedCurve(p);
+            //             if (res is Path2D)
+            //             {
+            //                 Path2D p2d = res as Path2D;
+            //                 p2d.Reduce(prec);   // vereinfacht den Pfad selbst, also res
+            //                 if (p2d.SubCurvesCount == 1) return p2d.SubCurves[0];
+            //             }
+            //             return res;*/
+            //         }
+            //     }
+            //     try
+            //     {
+            //         BSpline2D bsp2d = new BSpline2D(throughPoints2d.ToArray(), degree, this.periodic);
+            //         return bsp2d;
+            //     }
+            //     catch
+            //     {
+            //         return null; // kommt vor, wenn nicht genügend poles gefunden werden
+            //     }
+            //}
         }
         string ICurve.Description
         {
