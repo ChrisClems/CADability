@@ -21,6 +21,7 @@ using System.Runtime.Serialization;
 using System.Runtime.Serialization.Formatters.Binary;
 using System.Threading;
 using ACadSharp;
+using CADability.DXF;
 using netDxf.Header;
 using Color = System.Drawing.Color;
 
@@ -1801,19 +1802,23 @@ namespace CADability
                 }
             }
         }
-        private static Project ImportDXF(string filename)
+        private static Project ImportDxfOrDwg(string filename)
         {
-            using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
+            bool useACadSharp = Settings.GlobalSettings.GetBoolValue("DxfImport.UseACadSharp", false);
+            var format = System.IO.Path.GetExtension(filename).ToLower();
+            if (format.Equals(".dxf") && !useACadSharp)
             {
-                CADability.DXF.Import import = new DXF.Import(converted.DxfFileName);
-                return import.Project;
+                using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
+                {
+                    Import import = new Import(converted.DxfFileName);
+                    return import.Project;
+                }
             }
-        }
-        private static Project ImportDWG(string filename)
-        {
-            using (ConvertToDxfAutoCad2000 converted = new ConvertToDxfAutoCad2000(filename, "dxf"))
+            // Completely removing DWG netDxf import support
+            // Requires external third-party program to be installed
+            else
             {
-                CADability.DXF.Import import = new DXF.Import(converted.DxfFileName);
+                Import2 import = new Import2(filename);
                 return import.Project;
             }
         }
@@ -1835,8 +1840,9 @@ namespace CADability
             switch (Format)
             {
                 case "cdb": return ReadFromFile(FileName, useProgress);
-                case "dxf": return ImportDXF(FileName);
-                case "dwg": return ImportDWG(FileName);
+                case "dxf": 
+                case "dwg": 
+                    return ImportDxfOrDwg(FileName);
                 case "step":
                 case "stp":
                     ImportStep importStep = new ImportStep();
