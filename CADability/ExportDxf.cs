@@ -392,9 +392,10 @@ namespace CADability.DXF
             }
 
             if (bspline.HasWeights)
-                return new netDxf.Entities.Spline(poles, bspline.Weights, knots, (short)bspline.Degree, bspline.IsClosed);
+                // TODO: Do we need to check for periodic splines? IsClosed is not appropriate here.
+                return new netDxf.Entities.Spline(poles, bspline.Weights, knots, (short)bspline.Degree, false);
             else
-                return new netDxf.Entities.Spline(poles, null, knots, (short)bspline.Degree, bspline.IsClosed);
+                return new netDxf.Entities.Spline(poles, null, knots, (short)bspline.Degree, false);
         }
 
         private netDxf.Entities.Polyline3D ExportPolyline(GeoObject.Polyline polyline)
