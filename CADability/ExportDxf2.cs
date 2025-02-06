@@ -102,7 +102,16 @@ namespace CADability.DXF
                         entities = ExportPathWithoutBlock(path);
                     }
                     break;
-                case Text text: entity = ExportText(text); break;
+                case Text text:
+                    if (text.TextString.Contains(@"\r") || text.TextString.Contains(@"\n"))
+                    {
+                        entity = ExportMText(text);
+                    }
+                    else
+                    {
+                        entity = ExportText(text);
+                    }
+                    break;
                 case Block block: entity = ExportBlock(block); break;
                 case Face face: entity = ExportFace(face); break;
                 case Shell shell: entities = ExportShell(shell); break;
@@ -556,6 +565,101 @@ namespace CADability.DXF
             // ModOp toText = ModOp.Fit(GeoPoint.Origin, new GeoVector[] { GeoVector.XAxis, GeoVector.YAxis, GeoVector.ZAxis }, textGeoObj.Location, new GeoVector[] { textGeoObj.LineDirection.Normalized, textGeoObj.GlyphDirection.Normalized, textGeoObj.LineDirection.Normalized ^ textGeoObj.GlyphDirection.Normalized });
             // res.TransformBy(Matrix4(toText)); // easier than setting normal and rotation
             // return res;
+        }
+        
+        private MText ExportMText(Text textGeoObj)
+        {
+            string textValue = textGeoObj.TextString;
+            textValue = textValue.Replace(@"\r\n", @"\P");
+            textValue = textValue.Replace(@"\r", @"\P");
+            textValue = textValue.Replace(@"\n", @"\P");
+            // TODO: Use Text.FourPoints to use TextEntity.AlignmentPoint for rotation?
+            FontFlags fontFlags = FontFlags.Regular;
+            if (textGeoObj.ColorDef == null) textGeoObj.ColorDef = new ColorDef();
+            
+            if (textGeoObj.Bold) fontFlags |= FontFlags.Bold;
+            if (textGeoObj.Italic) fontFlags |= FontFlags.Italic;
+            if (textGeoObj.Underline) textValue = textValue.Insert(0, "%%U");
+            if (textGeoObj.Strikeout) textValue = textValue.Insert(0, "%%K");
+            // TODO: Calculate oblique angle from glyph direction and line direction
+
+            TextStyle textStyleDxf = new TextStyle(textGeoObj.Font)
+            {
+                Filename = textGeoObj.Font,
+            };
+
+            if (System.IO.Path.GetExtension(textGeoObj.Font).ToLower() == ".ttf")
+            {
+                textStyleDxf.TrueType = fontFlags;
+            }
+
+            foreach (TextStyle textStyle in doc.TextStyles)
+            {
+                if (textStyleDxf.Filename == textStyle.Filename && textStyleDxf.TrueType == textStyle.TrueType)
+                {
+                    textStyleDxf = textStyle;
+                    break;
+                }
+            }
+
+            switch (textGeoObj.ColorDef.Source)
+            {
+                case ColorDef.ColorSource.fromObject:
+                    break;
+                case ColorDef.ColorSource.fromParent:
+                    break;
+                case ColorDef.ColorSource.fromName:
+                    break;
+                case ColorDef.ColorSource.fromStyle:
+                    break;
+                default:
+                    throw new ArgumentOutOfRangeException();
+            }
+            
+            TextHorizontalAlignment horizontalAignment = TextHorizontalAlignment.Left;
+            TextVerticalAlignmentType verticalAlignment = TextVerticalAlignmentType.Baseline;
+
+            switch (textGeoObj.LineAlignment)
+            {
+                case Text.LineAlignMode.Left:
+                    horizontalAignment = TextHorizontalAlignment.Left;
+                    break;
+                case Text.LineAlignMode.Center:
+                    horizontalAignment = TextHorizontalAlignment.Center;
+                    break;
+                case Text.LineAlignMode.Right:
+                    horizontalAignment = TextHorizontalAlignment.Right;
+                    break;
+            }
+
+            switch (textGeoObj.Alignment)
+            {
+                case Text.AlignMode.Baseline:
+                    verticalAlignment = TextVerticalAlignmentType.Baseline;
+                    break;
+                case Text.AlignMode.Bottom:
+                    verticalAlignment = TextVerticalAlignmentType.Bottom;
+                    break;
+                case Text.AlignMode.Center:
+                    verticalAlignment = TextVerticalAlignmentType.Middle;
+                    break;
+                case Text.AlignMode.Top:
+                    verticalAlignment = TextVerticalAlignmentType.Top;
+                    break;
+            }
+            MText textEnt = new MText()
+            {
+                Value = textValue,
+                AttachmentPoint = AttachmentPointType.BottomLeft,
+                InsertPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
+                AlignmentPoint = new XYZ(textGeoObj.Location.x, textGeoObj.Location.y, textGeoObj.Location.z),
+                Normal = new XYZ(textGeoObj.Plane.Normal.x, textGeoObj.Plane.Normal.y, textGeoObj.Plane.Normal.z),
+                Height = textGeoObj.TextSize,
+                LineSpacing = 1,
+                Rotation = new Angle(textGeoObj.LineDirection.To2D()),
+                Style = textStyleDxf,
+            };
+            return textEnt;
         }
 
         private Insert ExportBlock(Block blk)
