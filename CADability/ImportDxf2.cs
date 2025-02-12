@@ -44,9 +44,15 @@ namespace CADability.DXF
         {
             using (Stream stream = File.Open(fileName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
             {
-                // MathHelper.Epsilon = 1e-8;
-                // doc = DxfDocument.Load(stream);
-                doc = ACadSharp.IO.DxfReader.Read(stream);
+                if (System.IO.Path.GetExtension(fileName).ToLower() == ".dxf")
+                {
+                    doc = ACadSharp.IO.DxfReader.Read(stream);
+                }
+                else if (System.IO.Path.GetExtension(fileName).ToLower() == ".dwg")
+                {
+                    doc = ACadSharp.IO.DwgReader.Read(stream);
+                }
+                else throw new ArgumentException("Invalid file extension. DXF and DWG files are supported.");
             }
         }
         public static bool CanImportVersion(string fileName)

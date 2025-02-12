@@ -75,10 +75,22 @@ namespace CADability.DXF
                     }
                 }
             }
-            using (DxfWriter writer = new DxfWriter(filename, doc, false))
+
+            if (System.IO.Path.GetExtension(filename.ToLower()) == ".dxf")
             {
-                writer.Write();
+                using (DxfWriter writer = new DxfWriter(filename.ToLower(), doc, false))
+                {
+                    writer.Write();
+                }
             }
+            else if (System.IO.Path.GetExtension(filename) == ".dwg")
+            {
+                using (DwgWriter writer = new DwgWriter(filename, doc))
+                {
+                    writer.Write();
+                }
+            }
+            else throw new ArgumentException("Invalid file format. DXF and DWG extensions are supported.");
         }
 
         private Entity[] GeoObjectToEntity(IGeoObject geoObject)
